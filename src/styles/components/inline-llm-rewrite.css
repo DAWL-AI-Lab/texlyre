@@ -1,0 +1,148 @@
+.inline-llm-rewrite {
+	position: fixed;
+	z-index: 1100;
+	width: min(420px, calc(100vw - 16px));
+	padding: 0.65rem;
+	border: 1px solid var(--pico-primary);
+	border-radius: var(--radius-md);
+	background: var(--pico-background-color);
+	box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.2);
+}
+
+.inline-llm-rewrite-trigger {
+	position: fixed;
+	z-index: 1100;
+	margin: 0;
+	padding: 0.35rem;
+	border: 1px solid var(--pico-primary);
+	border-radius: 999px;
+	background: var(--pico-background-color);
+	color: var(--pico-primary);
+	box-shadow: 0 0.2rem 0.65rem rgba(0, 0, 0, 0.2);
+	line-height: 0;
+}
+
+.inline-llm-rewrite-trigger svg {
+	stroke: var(--pico-primary-inverse);
+}
+
+.inline-llm-rewrite-trigger:hover {
+	background: var(--pico-primary-focus);
+}
+
+.inline-llm-rewrite-trigger:hover svg {
+	stroke: var(--pico-primary);
+}
+
+.inline-llm-rewrite-header,
+.inline-llm-rewrite-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.inline-llm-rewrite-header {
+	justify-content: space-between;
+	margin-bottom: 0.5rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.inline-llm-rewrite-header span,
+.inline-llm-rewrite-controls button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.inline-llm-rewrite-header button {
+	margin: 0;
+	padding: 0.15rem;
+	border: 0;
+	background: transparent;
+	color: inherit;
+}
+
+.inline-llm-rewrite input,
+.inline-llm-rewrite select,
+.inline-llm-rewrite button {
+	margin: 0;
+	font-size: 0.8rem;
+	height: fit-content;
+}
+
+.inline-llm-rewrite input {
+	width: 100%;
+	margin-bottom: 0.5rem;
+}
+
+.inline-llm-rewrite-controls {
+	justify-content: flex-end;
+}
+
+.inline-llm-rewrite-controls select {
+	min-width: 0;
+	max-width: 245px;
+	margin-right: auto;
+}
+
+.inline-llm-rewrite-controls button {
+	padding: 0.35rem 0.6rem;
+	align-self: stretch;
+	height: auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+
+.cm-inline-llm-suggestion {
+	display: inline;
+	white-space: pre-wrap;
+	font: inherit;
+}
+
+.cm-inline-llm-original,
+.cm-inline-llm-suggestion ins {
+	padding: 0.15rem 0.2rem;
+	border-radius: 0.2rem;
+}
+
+.cm-inline-llm-original {
+	background: color-mix(in srgb, #d92d20 14%, transparent);
+	text-decoration: line-through;
+}
+
+.cm-inline-llm-suggestion ins {
+	background: color-mix(in srgb, #12b76a 16%, transparent);
+	text-decoration: none;
+}
+
+.cm-inline-llm-suggestion-actions {
+	display: inline-flex;
+	gap: 0.3rem;
+	margin-left: 0.4rem;
+	vertical-align: middle;
+}
+
+.cm-inline-llm-suggestion-actions button {
+	margin: 0;
+	padding: 0.15rem 0.4rem;
+	font-size: 0.72rem;
+}
+
+.inline-llm-rewrite-error {
+	margin: 0.5rem 0 0;
+	color: var(--pico-del-color);
+	font-size: 0.75rem;
+}
+
+.codemirror-editor-container .cm-editor:not(.cm-focused) .cm-selectionBackground,
+.codemirror-editor-container .cm-editor:not(.cm-focused) .cm-content ::selection {
+	background-color: color-mix(in srgb, var(--pico-primary) 34%, transparent);
+}
+
+.cm-inline-llm-target {
+	background-color: color-mix(in srgb, var(--pico-primary) 42%, transparent) !important;
+	box-shadow: inset 0 -2px 0 var(--pico-primary);
+}

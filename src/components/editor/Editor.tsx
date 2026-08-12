@@ -59,6 +59,7 @@ import LSPToggleButton from '../bibliography/LSPToggleButton';
 import BibliographyPanel from '../bibliography/BibliographyPanel';
 import CommentModal from '../comments/CommentModal';
 import ContentFormatterButton from './ContentFormatterButton';
+import InlineLLMRewrite from './InlineLLMRewrite';
 import SourceMapButton from './SourceMapButton';
 import {
 	CopyIcon,
@@ -935,6 +936,7 @@ const EditorContent: React.FC<{
 					)}
 
 					<div ref={editorRef} className='codemirror-editor-container' />
+					{!isViewOnly && <InlineLLMRewrite viewRef={viewRef} />}
 
 					{showSaveIndicator && (
 						<div className={`save-indicator ${isViewOnly ? 'read-only' : ''}`}>

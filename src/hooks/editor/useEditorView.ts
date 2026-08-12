@@ -47,6 +47,7 @@ import {
 	reviewSystemExtension,
 	setTrackChanges,
 } from '../../extensions/codemirror/ReviewExtension';
+import { inlineLLMSuggestionExtension } from '../../extensions/codemirror/InlineLLMSuggestionExtension';
 import { latexTypstBidiIsolates } from '../../extensions/codemirror/BidiExtension';
 import { searchHighlightExtension } from '../../extensions/codemirror/SearchHighlightExtension';
 import {
@@ -714,6 +715,7 @@ export const useEditorView = (
 		extensions.push(...buildAnnotationExtensions());
 		extensions.push(...buildCommentExtensions());
 		extensions.push(...buildReviewExtensions());
+		extensions.push(inlineLLMSuggestionExtension);
 		extensions.push(...buildKeymapExtensions(info));
 
 		const cachedUndoHistory =

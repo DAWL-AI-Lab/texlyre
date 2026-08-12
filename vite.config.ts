@@ -7,7 +7,7 @@ import wasm from 'vite-plugin-wasm';
 
 const useHttps = process.env.VITE_USE_HTTPS === 'true';
 
-const basePath = '/texlyre/';
+const basePath = "/texlyre/";
 const appVersion = process.env.npm_package_version || '1.0.0';
 
 // @ts-expect-error
@@ -140,6 +140,18 @@ export default defineConfig({
 	server: {
 		host: true,
 		https: useHttps,
+		proxy: {
+			'/ollama': {
+				target: 'http://127.0.0.1:11434',
+				changeOrigin: true,
+				rewrite: (requestPath) => requestPath.replace(/^\/ollama/, ''),
+			},
+			'/vllm': {
+				target: 'http://127.0.0.1:8000',
+				changeOrigin: true,
+				rewrite: (requestPath) => requestPath.replace(/^\/vllm/, ''),
+			},
+		},
 		hmr: {
 			port: 5173,
 			clientPort: 5173,

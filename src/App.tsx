@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react';
 
 import './styles/global.css';
 import './styles/components/editor.css';
+import './styles/components/inline-llm-rewrite.css';
 import './styles/components/editor-tabs.css';
 import './styles/components/codemirror.css';
 import './styles/components/conflicts.css';
