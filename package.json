@@ -136,6 +136,7 @@
 		"vscode-oniguruma": "^2.0.1",
 		"vscode-textmate": "^9.3.2",
 		"wasm-latex-tools": "^0.1.1",
+		"ws": "^8.21.0",
 		"workbox-build": "^7.4.1",
 		"y-codemirror.next": "=0.3.5",
 		"y-indexeddb": "^9.0.12",
