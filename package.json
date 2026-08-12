@@ -16,7 +16,7 @@
 	},
 	"scripts": {
 		"start": "node scripts/pm.cjs run build:prod && node scripts/pm.cjs run test:check && node scripts/pm.cjs run preview",
-		"predev": "node scripts/setup-assets.cjs",
+		"predev": "node scripts/pm.cjs run generate:plugins && node scripts/setup-assets.cjs",
 		"dev": "node scripts/pm.cjs vite",
 		"dev:https": "node scripts/pm.cjs cross-env VITE_USE_HTTPS=true vite --host",
 		"build": "node scripts/pm.cjs run generate:plugins && node scripts/pm.cjs tsc && node scripts/setup-assets.cjs && node scripts/pm.cjs vite build",

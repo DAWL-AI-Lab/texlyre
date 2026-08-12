@@ -252,8 +252,9 @@ const PdfRenderer: React.FC<RendererProps> = ({
 			setHighlight: (nextHighlight: Highlight) => {
 				setHighlight(nextHighlight);
 				if (nextHighlight) {
-					const targetPage = nextHighlight.page;
-					requestAnimationFrame(() => goToPage(targetPage));
+					requestAnimationFrame(() =>
+						fullViewerRef.current?.goToHighlight(nextHighlight),
+					);
 				}
 			},
 		}),
