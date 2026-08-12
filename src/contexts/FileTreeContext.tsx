@@ -34,6 +34,22 @@ const moduleLog = createNamedLogger('FileTreeContext');
 
 export const FileTreeContext = createContext<FileTreeContextType | null>(null);
 
+function getUploadRelativePath(file: File): string {
+	const segments = (file.webkitRelativePath || file.name)
+		.replaceAll('\\', '/')
+		.split('/')
+		.filter(Boolean);
+
+	if (
+		segments.length === 0 ||
+		segments.some((segment) => segment === '.' || segment === '..')
+	) {
+		throw new Error(`Invalid upload path: ${file.name}`);
+	}
+
+	return segments.join('/');
+}
+
 interface FileTreeProviderProps {
 	children: ReactNode;
 	docUrl: YjsDocUrl;
@@ -116,17 +132,42 @@ export const FileTreeProvider: React.FC<FileTreeProviderProps> = ({
 				}
 
 				const filesToProcess: FileNode[] = [];
+				const directories = new Map<string, FileNode>();
 
 				for (let i = 0; i < files.length; i++) {
 					const file = files[i];
+					const relativePath = getUploadRelativePath(file);
+					const pathSegments = relativePath.split('/');
+					let directoryPath = targetPath;
+
+					for (const directoryName of pathSegments.slice(0, -1)) {
+						directoryPath =
+							directoryPath === '/'
+								? `/${directoryName}`
+								: `${directoryPath}/${directoryName}`;
+
+						if (!directories.has(directoryPath)) {
+							directories.set(directoryPath, {
+								id: nanoid(),
+								name: directoryName,
+								path: directoryPath,
+								type: 'directory',
+								lastModified: file.lastModified,
+							});
+						}
+					}
+
 					const filePath =
-						targetPath === '/' ? `/${file.name}` : `${targetPath}/${file.name}`;
+						targetPath === '/'
+							? `/${relativePath}`
+							: `${targetPath}/${relativePath}`;
 					const fileContent = await file.arrayBuffer();
-					const mimeType = getMimeType(file.name);
-					const binary = isBinaryFile(file.name);
+					const fileName = pathSegments.at(-1) || file.name;
+					const mimeType = getMimeType(fileName);
+					const binary = isBinaryFile(fileName);
 					const rawFile: FileNode = {
 						id: nanoid(),
-						name: file.name,
+						name: fileName,
 						path: filePath,
 						type: 'file',
 						content: fileContent,
@@ -139,7 +180,10 @@ export const FileTreeProvider: React.FC<FileTreeProviderProps> = ({
 				}
 
 				try {
-					await fileStorageService.batchStoreFiles(filesToProcess);
+					await fileStorageService.batchStoreFiles([
+						...directories.values(),
+						...filesToProcess,
+					]);
 				} catch (error) {
 					if (
 						error instanceof Error &&

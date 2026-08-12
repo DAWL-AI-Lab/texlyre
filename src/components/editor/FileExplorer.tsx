@@ -17,6 +17,7 @@ import { createZipFromFolder, downloadZipFile } from '../../utils/zipUtils';
 import {
 	ExportIcon,
 	FilePlusIcon,
+	FolderOpenIcon,
 	FolderPlusIcon,
 	RefreshIcon,
 	UploadIcon,
@@ -107,6 +108,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 	const [fileCreationParentPath, setFileCreationParentPath] =
 		useState<string>('/');
 	const fileCreationButtonRef = useRef<HTMLButtonElement>(null);
+	const folderUploadInputRef = useRef<HTMLInputElement>(null);
 
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
@@ -236,6 +238,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 		const files = event.target.files;
 		if (files && files.length > 0) {
 			await processFiles(Array.from(files), currentPath);
+			event.target.value = '';
+		}
+	};
+
+	const handleFolderUpload = async (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const files = event.target.files;
+		if (files && files.length > 0) {
+			await uploadFiles(Array.from(files), currentPath);
 			event.target.value = '';
 		}
 	};
@@ -594,6 +606,21 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 			const files = (e.target as HTMLInputElement).files;
 			if (files && files.length > 0) {
 				await processFiles(Array.from(files), folderPath);
+			}
+		};
+		input.click();
+		setActiveMenu(null);
+	};
+
+	const handleUploadFolderToFolder = (folderPath: string) => {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.multiple = true;
+		input.webkitdirectory = true;
+		input.onchange = async (e) => {
+			const files = (e.target as HTMLInputElement).files;
+			if (files && files.length > 0) {
+				await uploadFiles(Array.from(files), folderPath);
 			}
 		};
 		input.click();
@@ -968,11 +995,30 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 							<UploadIcon />
 						</button>
 
+						<button
+							className='action-btn'
+							title={t('Upload Folder')}
+							onClick={() => folderUploadInputRef.current?.click()}
+						>
+							<FolderOpenIcon />
+						</button>
+
 						<input
 							id='file-input'
 							type='file'
 							multiple
 							onChange={handleFileUpload}
+							style={{ display: 'none' }}
+						/>
+
+						<input
+							ref={(input) => {
+								folderUploadInputRef.current = input;
+								if (input) input.webkitdirectory = true;
+							}}
+							type='file'
+							multiple
+							onChange={handleFolderUpload}
 							style={{ display: 'none' }}
 						/>
 
@@ -1090,6 +1136,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 									onCreateFileInFolder={handleCreateFileInFolder}
 									onCreateSubfolder={handleCreateSubfolder}
 									onUploadToFolder={handleUploadToFolder}
+									onUploadFolderToFolder={handleUploadFolderToFolder}
 									onExpandAllSubfolders={expandAllSubfolders}
 									onCollapseAllSubfolders={collapseAllSubfolders}
 									onDeleteFileOrDirectory={deleteFileOrDirectory}
