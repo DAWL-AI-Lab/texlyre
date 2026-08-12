@@ -278,7 +278,11 @@ export const SourceMapProvider: React.FC<SourceMapProviderProps> = ({
 					}),
 				);
 
-				gotoEditor(target, { line: result.line }, { waitForReady: false });
+				gotoEditor(
+					target,
+					{ line: result.line, column: result.column },
+					{ waitForReady: false },
+				);
 			} catch (error) {
 				moduleLog.error('Reverse sync navigation failed:', error);
 			}

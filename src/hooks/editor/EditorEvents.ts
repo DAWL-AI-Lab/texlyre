@@ -197,6 +197,7 @@ export const registerEditorEventHandlers = (
 	const handleGotoLine = (event: Event) => {
 		const customEvent = event as CustomEvent<{
 			line?: number;
+			column?: number;
 			fileId?: string;
 			documentId?: string;
 			tabId?: string;
@@ -208,6 +209,7 @@ export const registerEditorEventHandlers = (
 		try {
 			const {
 				line,
+				column,
 				fileId,
 				documentId: eventDocId,
 				tabId,
@@ -242,7 +244,12 @@ export const registerEditorEventHandlers = (
 				}
 
 				const lineNumber = Math.max(1, Math.min(line, doc.lines)) - 1;
-				const linePos = doc.line(lineNumber + 1).from;
+				const targetLine = doc.line(lineNumber + 1);
+				const linePos =
+					targetLine.from +
+					(typeof column === 'number' && column >= 0
+						? Math.min(column, targetLine.length)
+						: 0);
 
 				view.dispatch({
 					selection: { anchor: linePos, head: linePos },
