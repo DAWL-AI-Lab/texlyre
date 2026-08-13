@@ -148,7 +148,7 @@ const config: TexlyreConfig = {
 				genericTypesetterConfigs: [
 					{
 						id: "local-latexmk",
-						name: "Local MiKTeX (LuaLaTeX, Biber, SyncTeX)",
+						name: "Local MiKTeX",
 						enabled: true,
 						projectType: "latex",
 						projectGroup: "tex",
@@ -159,6 +159,31 @@ const config: TexlyreConfig = {
 							url: "ws://localhost:7021",
 						},
 						capabilities: { outline: true },
+						ui: {
+							compile: {
+								fields: [
+									{
+										key: "engine",
+										label: "LaTeX Engine:",
+										kind: "select",
+										defaultValue: "lualatex",
+										options: [
+											{ label: "pdfLaTeX", value: "pdflatex" },
+											{ label: "XeLaTeX", value: "xelatex" },
+											{ label: "LuaLaTeX", value: "lualatex" },
+										],
+									},
+								],
+							},
+							info: {
+								title: "Local MiKTeX",
+								rows: [
+									{ label: "LaTeX Compilers:", value: "pdfLaTeX, XeLaTeX, LuaLaTeX" },
+									{ label: "Bibliography:", value: "Biber" },
+									{ label: "Source map:", value: "SyncTeX" },
+								],
+							},
+						},
 					},
 				],
 				templatesApiUrl: "https://texlyre.github.io/texlyre-templates/api/templates.json",

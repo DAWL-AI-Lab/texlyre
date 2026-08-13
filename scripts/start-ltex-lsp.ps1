@@ -24,5 +24,27 @@ $logDirectory = Join-Path $toolsRoot 'logs'
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 $stdoutLog = Join-Path $logDirectory 'ltex-lsp.stdout.log'
 $stderrLog = Join-Path $logDirectory 'ltex-lsp.stderr.log'
-$process = Start-Process -FilePath $proxy -ArgumentList $arguments -Environment @{ JAVA_HOME = $javaHome; RUST_LOG = 'debug' } -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru
+
+$previousJavaHome = $env:JAVA_HOME
+$previousRustLog = $env:RUST_LOG
+try {
+    # -Environment is unavailable in Windows PowerShell 5.1. Start-Process
+    # inherits these temporary process environment variables instead.
+    $env:JAVA_HOME = $javaHome
+    $env:RUST_LOG = 'debug'
+    $process = Start-Process -FilePath $proxy -ArgumentList $arguments -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru -ErrorAction Stop
+} finally {
+    if ($null -eq $previousJavaHome) {
+        Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
+    } else {
+        $env:JAVA_HOME = $previousJavaHome
+    }
+
+    if ($null -eq $previousRustLog) {
+        Remove-Item Env:RUST_LOG -ErrorAction SilentlyContinue
+    } else {
+        $env:RUST_LOG = $previousRustLog
+    }
+}
+
 Write-Output "Started LTeX LS Plus (PID $($process.Id)) at ws://localhost:$Port. Logs: $stderrLog"

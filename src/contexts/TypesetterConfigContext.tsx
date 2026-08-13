@@ -60,6 +60,40 @@ interface StoredTypesetterConfig {
 	ui?: unknown;
 }
 
+const LEGACY_LOCAL_MIKTEX_NAME =
+	'Local MiKTeX (LuaLaTeX, Biber, SyncTeX)';
+const LOCAL_MIKTEX_NAME =
+	'Local MiKTeX (pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, SyncTeX)';
+
+// Existing installations keep their generic typesetter configuration in
+// localStorage. Supply the selector when upgrading the original MiKTeX config
+// so users do not need to clear their settings before the new UI can appear.
+const LOCAL_MIKTEX_UI: CompilerUISchema = {
+	compile: {
+		fields: [
+			{
+				key: 'engine',
+				label: 'LaTeX Engine:',
+				kind: 'select',
+				defaultValue: 'lualatex',
+				options: [
+					{ label: 'pdfLaTeX', value: 'pdflatex' },
+					{ label: 'XeLaTeX', value: 'xelatex' },
+					{ label: 'LuaLaTeX', value: 'lualatex' },
+				],
+			},
+		],
+	},
+	info: {
+		title: 'Local MiKTeX',
+		rows: [
+			{ label: 'LaTeX Compilers:', value: 'pdfLaTeX, XeLaTeX, LuaLaTeX' },
+			{ label: 'Bibliography:', value: 'Biber' },
+			{ label: 'Source map:', value: 'SyncTeX' },
+		],
+	},
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
@@ -376,15 +410,19 @@ function normalizeConfig(value: unknown): TypesetterServerConfig | null {
 		return null;
 	}
 
-	const ui = normalizeUISchema(config.ui);
+	const ui =
+		normalizeUISchema(config.ui) ??
+		(id === 'local-latexmk' ? LOCAL_MIKTEX_UI : undefined);
 	const inputFiles = normalizeInputFiles(config.inputFiles);
 
 	return {
 		id,
 		name:
-			typeof config.name === 'string' && config.name.trim()
-				? config.name
-				: id.toUpperCase(),
+			config.name === LEGACY_LOCAL_MIKTEX_NAME
+				? LOCAL_MIKTEX_NAME
+				: typeof config.name === 'string' && config.name.trim()
+					? config.name
+					: id.toUpperCase(),
 		enabled: config.enabled !== false,
 		projectType: config.projectType,
 		projectGroup:

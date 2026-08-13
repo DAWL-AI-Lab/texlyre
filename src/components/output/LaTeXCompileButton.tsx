@@ -22,6 +22,7 @@ import {
 } from '../../utils/fileUtils';
 import { fileStorageService } from '../../services/FileStorageService';
 import { latexService } from '../../services/LaTeXService';
+import { compilerRegistryService } from '../../services/CompilerRegistryService';
 import { BUSYTEX_BUNDLE_LABELS } from '../../extensions/texlyre-busytex/BusyTeXService';
 import {
 	ChevronDownIcon,
@@ -96,6 +97,9 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 		Record<string, boolean>
 	>({});
 	const [isDeletingBundle, setIsDeletingBundle] = useState<string | null>(null);
+	const [, setCompilerRegistryVersion] = useState(
+		compilerRegistryService.getVersion(),
+	);
 
 	const isInitializingRef = useRef(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
@@ -108,6 +112,14 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 		false,
 	);
 	const propertiesRegistered = useRef(false);
+
+	useEffect(
+		() =>
+			compilerRegistryService.onChange(() => {
+				setCompilerRegistryVersion(compilerRegistryService.getVersion());
+			}),
+		[],
+	);
 
 	const projectId = fileStorageService.getCurrentProjectId() || undefined;
 
@@ -145,6 +157,20 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 	const projectFormat = useSharedSettings
 		? doc?.projectMetadata?.latexOutputFormat
 		: undefined;
+	const localMiKTeXProvider = compilerRegistryService.get('local-latexmk');
+
+	const handleCompilerChange = (compilerId: string) => {
+		if (!useSharedSettings || !changeDoc || compilerId === 'internal:latex') {
+			return;
+		}
+
+		changeDoc((d) => {
+			if (!d.projectMetadata) {
+				d.projectMetadata = { name: '', description: '' };
+			}
+			d.projectMetadata.compilerId = compilerId;
+		});
+	};
 
 	const effectiveMainFile = projectMainFile || propMainFile || autoMainFile;
 	const effectiveEngine = projectEngine || propEngine || settingEngine;
@@ -803,6 +829,25 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 							/>
 							{t('Share with collaborators')}
 						</label>
+					</div>
+				)}
+
+				{useSharedSettings && localMiKTeXProvider && (
+					<div className='dropdown-section'>
+						<div className='dropdown-title'>{t('Compiler')}</div>
+						<select
+							value='internal:latex'
+							onChange={(e) => handleCompilerChange(e.target.value)}
+							className='dropdown-select'
+							disabled={isChangingEngine || isCompiling}
+						>
+							<option value='internal:latex'>
+								{t('SwiftLaTeX & BusyTeX (browser)')}
+							</option>
+							<option value={localMiKTeXProvider.id}>
+								{localMiKTeXProvider.label}
+							</option>
+						</select>
 					</div>
 				)}
 

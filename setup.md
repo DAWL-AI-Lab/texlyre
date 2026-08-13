@@ -18,7 +18,7 @@ Install or obtain the following before starting. All links below are official pr
 | --------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Git                                     | Clone and update this repository                                                | [git-scm.com/download/win](https://git-scm.com/download/win)                                                               |
 | Node.js 24.19.0 (Windows x64 Installer) | Build and run Texlyre; the supplied launcher is pinned to this portable version | [Download the Installer](https://nodejs.org/dist/v24.19.0/node-v24.19.0-x64.msi)                                           |
-| MiKTeX                                  | Local LuaLaTeX, `latexmk`, Biber, and SyncTeX compilation                       | [MiKTeX for Windows](https://miktex.org/download)                                                                          |
+| MiKTeX                                  | Local pdfLaTeX, XeLaTeX, LuaLaTeX, `latexmk`, Biber, and SyncTeX compilation     | [MiKTeX for Windows](https://miktex.org/download)                                                                          |
 | LTeX LS Plus 18.7.0 (Windows x64 ZIP)   | Grammar and spelling language server                                            | [Download the ZIP](https://github.com/ltex-plus/ltex-ls-plus/releases/download/18.7.0/ltex-ls-plus-18.7.0-windows-x64.zip) |
 | Rust toolchain                          | Build the small WebSocket-to-LSP bridge                                         | [rustup.rs](https://rustup.rs/)                                                                                            |
 
@@ -78,16 +78,18 @@ The version command must print `v24.19.0`. Run the last command from the reposit
 
 1. Download and run the [MiKTeX installer](https://miktex.org/download). A per-user installation is sufficient.
 2. In **MiKTeX Console**, open **Settings** and set **Install missing packages on-the-fly** to **Always**. This is important because the background compiler cannot respond to an interactive package-install prompt.
-3. In the **Packages** tab, install at least `latexmk`, `biber`, `biblatex`, `fontspec`, and the LaTeX/LuaTeX base packages required by your document. Install project-specific packages reported by the log as needed.
+3. In the **Packages** tab, install at least `latexmk`, `biber`, `biblatex`, `fontspec`, and the pdfTeX/XeTeX/LuaTeX base packages required by your document. Install project-specific packages reported by the log as needed.
 4. Close and reopen PowerShell so MiKTeX is on `PATH`, then verify:
 
 ```powershell
 latexmk -v
 lualatex --version
+xelatex --version
+pdflatex --version
 biber --version
 ```
 
-All three commands must succeed. This project always runs `latexmk -lualatex -synctex=1`; use a different compiler only after adapting `scripts\local-latex-typesetter.mjs` and the typesetter configuration.
+All five commands must succeed. The compiler menu selects the corresponding `latexmk` engine while keeping SyncTeX enabled.
 
 ## 5. Install LTeX LS Plus and the WebSocket bridge
 
@@ -150,9 +152,17 @@ The script starts the following background services if their ports are unused, t
 | Service                 | Address                                   | Purpose                                   |
 | ----------------------- | ----------------------------------------- | ----------------------------------------- |
 | LTeX + bridge           | `ws://127.0.0.1:7020`                     | LSP diagnostics, quick fixes, completions |
-| Local MiKTeX typesetter | `ws://127.0.0.1:7021`                     | LuaLaTeX/Biber/PDF/SyncTeX compilation    |
+| Local MiKTeX typesetter | `ws://127.0.0.1:7021`                     | pdfLaTeX/XeLaTeX/LuaLaTeX/Biber/PDF/SyncTeX compilation |
 | Optional vLLM tunnel    | `http://127.0.0.1:8000`                   | Remote rewrite assistant proxy            |
 | Vite                    | normally `http://localhost:5173/texlyre/` | Texlyre web application                   |
+
+To stop services left behind by an earlier run before starting again, use:
+
+```powershell
+.\scripts\stop-texlyre-services.ps1
+```
+
+This stops only recognised TeXlyre background services (LTeX, the local MiKTeX typesetter, and the vLLM tunnel). Add `-IncludeVite` to stop a lingering Vite server too. Use `-WhatIf` to preview, or `-ForceUnknownListeners` only after verifying an unrecognised listener belongs to TeXlyre.
 
 Open the Vite URL printed in the console. Use normal HTTP for this setup. Starting Vite in HTTPS mode while the LSP/typesetter use `ws://` makes browsers block them as mixed content.
 
@@ -181,7 +191,7 @@ Texlyre imports files into browser storage. It does not edit the selected source
 
 1. Create or open a Texlyre project.
 2. Select **External → TeX** as the typesetter type.
-3. Choose **Local MiKTeX (LuaLaTeX, Biber, SyncTeX)** as the compiler.
+3. Choose **Local MiKTeX (pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, SyncTeX)** as the compiler.
 4. In the **Files** toolbar, select **Upload Folder** (the folder icon next to **Upload Files**).
 5. Select the project directory. Its nested file paths are preserved.
 6. Open the project’s main `.tex` file and compile.
@@ -190,7 +200,7 @@ For the dissertation example, select `C:\Users\alang\OneDrive\Master in AI\Disse
 
 ### Choosing a compiler
 
-- **Local MiKTeX** is recommended for Biber/biblatex projects and projects needing installed fonts or packages. It compiles a temporary copy and returns the PDF and `.synctex.gz` file.
+- **Local MiKTeX** is recommended for Biber/biblatex projects and projects needing installed fonts or packages. Select pdfLaTeX, XeLaTeX, or LuaLaTeX from the compilation menu; it compiles a temporary copy and returns the PDF and `.synctex.gz` file.
 - **BusyTeX LuaLaTeX** is the browser-only fallback. It is convenient for quick/simple documents and has built-in SyncTeX support, but does not provide Biber. It cannot compile a project that requires Biber unless that project is changed to a supported bibliography workflow.
 
 ### SyncTeX use

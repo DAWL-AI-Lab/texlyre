@@ -6,10 +6,13 @@ import { t } from '@/i18n';
 import PositionedDropdown from '../common/PositionedDropdown';
 import PopoutViewerToggleButton from './PopoutViewerToggleButton';
 import { useExternalCompiler } from '../../hooks/useExternalCompiler';
+import { useCollab } from '../../hooks/useCollab';
 import { useFileTree } from '../../hooks/useFileTree';
 import { useProperties } from '../../hooks/useProperties';
 import { fileStorageService } from '../../services/FileStorageService';
 import { genericTypesetterService } from '../../services/GenericTypesetterService';
+import { compilerRegistryService } from '../../services/CompilerRegistryService';
+import type { DocumentList } from '../../types/documents';
 import type {
 	CompilerProvider,
 	CompilerUIField,
@@ -53,6 +56,7 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 	const { isCompiling, isExporting, compileDocument, clearCache } =
 		useExternalCompiler();
 	const { selectedFileId, getFile, fileTree } = useFileTree();
+	const { changeData: changeDoc } = useCollab<DocumentList>();
 	const { getProperty, setProperty, registerProperty } = useProperties();
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 	const [isGroupOpen, setIsGroupOpen] = useState(false);
@@ -229,6 +233,18 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 
 	const status = genericTypesetterService.getConnectionStatus(provider.id);
 	const isDisabled = isCompiling || isExporting || !effectiveMainFile;
+	const browserLatexProvider = compilerRegistryService.get('internal:latex');
+
+	const handleCompilerChange = (compilerId: string) => {
+		if (!useSharedSettings || compilerId === provider.id) return;
+
+		changeDoc((d) => {
+			if (!d.projectMetadata) {
+				d.projectMetadata = { name: '', description: '' };
+			}
+			d.projectMetadata.compilerId = compilerId;
+		});
+	};
 
 	const isFieldVisible = useCallback(
 		(field: CompilerUIField): boolean => {
@@ -377,6 +393,23 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 						))}
 					</select>
 				</div>
+
+				{useSharedSettings && provider.id === 'local-latexmk' && browserLatexProvider && (
+					<div className='dropdown-section'>
+						<div className='dropdown-title'>{t('Compiler')}</div>
+						<select
+							value={provider.id}
+							onChange={(e) => handleCompilerChange(e.target.value)}
+							className='dropdown-select'
+							disabled={isCompiling}
+						>
+							<option value={browserLatexProvider.id}>
+								{t('SwiftLaTeX & BusyTeX (browser)')}
+							</option>
+							<option value={provider.id}>{provider.label}</option>
+						</select>
+					</div>
+				)}
 
 				{(ungroupedFields.length > 0 || groupedFields.length > 0) && (
 					<div className='dropdown-section'>

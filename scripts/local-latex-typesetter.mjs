@@ -7,6 +7,23 @@ import { WebSocketServer } from 'ws';
 const port = Number.parseInt(process.env.TEXLYRE_TYPESETTER_PORT ?? '7021', 10);
 const host = '127.0.0.1';
 
+const LATEXMK_ENGINE_FLAGS = {
+	pdflatex: '-pdf',
+	xelatex: '-xelatex',
+	lualatex: '-lualatex',
+};
+
+function resolveEngine(request) {
+	const requested = request?.options?.engine;
+	if (
+		typeof requested === 'string' &&
+		Object.hasOwn(LATEXMK_ENGINE_FLAGS, requested)
+	) {
+		return requested;
+	}
+	return 'lualatex';
+}
+
 function toBase64(bytes) {
 	return Buffer.from(bytes).toString('base64');
 }
@@ -51,6 +68,7 @@ function run(command, args, cwd) {
 async function handleCompile(request) {
 	const requestId = typeof request.requestId === 'string' ? request.requestId : '';
 	const format = typeof request.format === 'string' ? request.format : 'pdf';
+	const engine = resolveEngine(request);
 	const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'texlyre-latex-'));
 
 	try {
@@ -87,7 +105,7 @@ async function handleCompile(request) {
 				'-file-line-error',
 				'-interaction=nonstopmode',
 				'-synctex=1',
-				'-lualatex',
+				LATEXMK_ENGINE_FLAGS[engine],
 				`-outdir=${outputDirectory}`,
 				mainFile,
 			],

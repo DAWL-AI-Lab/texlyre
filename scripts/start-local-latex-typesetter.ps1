@@ -15,7 +15,7 @@ foreach ($path in @($node, $server)) {
 }
 
 if (-not (Get-Command latexmk -ErrorAction SilentlyContinue)) {
-    throw 'latexmk was not found on PATH. Install MiKTeX with LuaLaTeX, Biber, and latexmk first.'
+    throw 'latexmk was not found on PATH. Install MiKTeX with pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, and latexmk first.'
 }
 
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
@@ -27,5 +27,19 @@ $logDirectory = Join-Path $toolsRoot 'logs'
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 $stdoutLog = Join-Path $logDirectory 'latex-typesetter.stdout.log'
 $stderrLog = Join-Path $logDirectory 'latex-typesetter.stderr.log'
-$process = Start-Process -FilePath $node -ArgumentList $server -Environment @{ TEXLYRE_TYPESETTER_PORT = "$Port" } -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru
+
+$previousTypesetterPort = $env:TEXLYRE_TYPESETTER_PORT
+try {
+    # -Environment is unavailable in Windows PowerShell 5.1. Start-Process
+    # inherits this temporary process environment variable instead.
+    $env:TEXLYRE_TYPESETTER_PORT = "$Port"
+    $process = Start-Process -FilePath $node -ArgumentList $server -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru -ErrorAction Stop
+} finally {
+    if ($null -eq $previousTypesetterPort) {
+        Remove-Item Env:TEXLYRE_TYPESETTER_PORT -ErrorAction SilentlyContinue
+    } else {
+        $env:TEXLYRE_TYPESETTER_PORT = $previousTypesetterPort
+    }
+}
+
 Write-Output "Started the local LaTeX typesetter (PID $($process.Id)) at ws://localhost:$Port. Logs: $stderrLog"
