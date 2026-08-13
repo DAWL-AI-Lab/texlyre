@@ -326,9 +326,9 @@ export const PdfJsFullViewer = forwardRef<PdfJsFullViewerHandle, Props>(
 		useImperativeHandle(
 			ref,
 			() => ({
-				goToPage: (page: number) => setViewerPage(page, true),
+				goToPage: (page: number) => setViewerPage(page),
 				goToHighlight: (nextHighlight) => {
-					setViewerPage(nextHighlight.page, true);
+					setViewerPage(nextHighlight.page);
 					// setViewerPage requests a page-top correction while the target is
 					// rendering. A SyncTeX jump has a more precise destination, so do
 					// not let the later pagerendered event undo the rect positioning.
@@ -530,9 +530,16 @@ export const PdfJsFullViewer = forwardRef<PdfJsFullViewerHandle, Props>(
 		useEffect(() => {
 			const pdfViewer = pdfViewerRef.current;
 			if (!pdfViewer) return;
+
 			setViewerScale(scale);
+		}, [scale, setViewerScale]);
+
+		useEffect(() => {
+			const pdfViewer = pdfViewerRef.current;
+			if (!pdfViewer) return;
+
 			renderHighlight(pdfViewer, highlight);
-		}, [scale, highlight, setViewerScale]);
+		}, [highlight]);
 
 		useEffect(() => {
 			const pdfViewer = pdfViewerRef.current;
