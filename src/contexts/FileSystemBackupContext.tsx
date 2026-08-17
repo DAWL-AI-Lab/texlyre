@@ -9,6 +9,7 @@ import React, {
 
 import { useSettings } from '../hooks/useSettings';
 import { fileSystemBackupService } from '../services/FileSystemBackupService';
+import { fileStorageService } from '../services/FileStorageService';
 import type { ImportableProject } from '../services/ProjectImportService';
 
 interface BackupStatus {
@@ -106,8 +107,12 @@ export const FileSystemBackupProvider: React.FC<
 		(getSetting('file-sys-backup-enable')?.value as boolean) ?? false;
 	const autoBackupOnStartup =
 		(getSetting('file-sys-backup-auto-backup')?.value as boolean) ?? false;
-	const _autoSyncOnChange =
-		(getSetting('file-sys-backup-auto-sync')?.value as boolean) ?? false;
+	const backupOnSave =
+		(getSetting('file-sys-backup-on-save')?.value as boolean) ?? false;
+	const timedBackupEnabled =
+		(getSetting('file-sys-backup-timed-enable')?.value as boolean) ?? false;
+	const timedBackupIntervalMinutes =
+		(getSetting('file-sys-backup-timed-interval')?.value as number) ?? 15;
 
 	const getEffectiveEnabled = useCallback(() => {
 		return backupEnabledSetting || tempEnabled;
@@ -256,6 +261,45 @@ export const FileSystemBackupProvider: React.FC<
 			fileSystemBackupService.setEnabled(false);
 		}
 	}, [backupEnabledSetting, tempEnabled]);
+
+	useEffect(() => {
+		if (!backupEnabledSetting || !backupOnSave || !status.isConnected) {
+			return;
+		}
+
+		const handleFileSaved = () => {
+			const projectId = fileStorageService.getCurrentProjectId();
+			if (projectId) {
+				void fileSystemBackupService.synchronize(projectId);
+			}
+		};
+
+		document.addEventListener('file-saved', handleFileSaved);
+		return () => document.removeEventListener('file-saved', handleFileSaved);
+	}, [backupEnabledSetting, backupOnSave, status.isConnected]);
+
+	useEffect(() => {
+		if (
+			!backupEnabledSetting ||
+			!timedBackupEnabled ||
+			!status.isConnected ||
+			!Number.isFinite(timedBackupIntervalMinutes) ||
+			timedBackupIntervalMinutes < 1
+		) {
+			return;
+		}
+
+		const intervalId = window.setInterval(() => {
+			void fileSystemBackupService.synchronize();
+		}, timedBackupIntervalMinutes * 60 * 1000);
+
+		return () => window.clearInterval(intervalId);
+	}, [
+		backupEnabledSetting,
+		timedBackupEnabled,
+		timedBackupIntervalMinutes,
+		status.isConnected,
+	]);
 
 	const contextValue = React.useMemo(
 		() => ({

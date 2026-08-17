@@ -36,6 +36,7 @@ class FileSystemBackupService {
 	private activityListeners: Array<(activities: BackupActivity[]) => void> = [];
 	private discoveryListeners: Array<(result: BackupDiscoveryResult) => void> =
 		[];
+	private exportQueue: Promise<void> = Promise.resolve();
 
 	addActivity(activity: Omit<BackupActivity, 'id' | 'timestamp'>): void {
 		const fullActivity: BackupActivity = {
@@ -173,7 +174,15 @@ class FileSystemBackupService {
 		this.updateStatus({ isEnabled: enabled });
 	}
 
-	async exportToFileSystem(projectId?: string): Promise<void> {
+	exportToFileSystem(projectId?: string): Promise<void> {
+		const exportTask = this.exportQueue.then(() =>
+			this.performExportToFileSystem(projectId),
+		);
+		this.exportQueue = exportTask.catch(() => undefined);
+		return exportTask;
+	}
+
+	private async performExportToFileSystem(projectId?: string): Promise<void> {
 		if (!this.canSync()) {
 			this.addActivity({
 				type: 'backup_error',
