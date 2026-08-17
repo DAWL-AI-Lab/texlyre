@@ -37,6 +37,15 @@ const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
 						<div className='shortcuts-list'>
 							<div className='shortcut-item'>
 								<div className='shortcut-keys'>
+									<kbd>{t('Ctrl')}</kbd> + <kbd>P</kbd>
+								</div>
+								<div className='shortcut-description'>
+									{t('Quick open file')}
+								</div>
+							</div>
+
+							<div className='shortcut-item'>
+								<div className='shortcut-keys'>
 									<kbd>{t('F9')}</kbd>
 								</div>
 								<div className='shortcut-description'>

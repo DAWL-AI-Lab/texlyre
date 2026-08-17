@@ -9,6 +9,17 @@ const getSelectedText = (): string => {
 export const useGlobalKeyboard = () => {
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
+			// Ctrl/Cmd+P - Quick Open files. Prevent the browser print dialog.
+			if (
+				event.code === 'KeyP' &&
+				(event.ctrlKey || event.metaKey) &&
+				!event.shiftKey
+			) {
+				event.preventDefault();
+				document.dispatchEvent(new CustomEvent('open-file-quick-open'));
+				return;
+			}
+
 			// F9 - Regular compile
 			if (event.key === 'F9' && !event.shiftKey && !event.ctrlKey) {
 				event.preventDefault();

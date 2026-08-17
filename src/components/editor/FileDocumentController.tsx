@@ -47,6 +47,7 @@ import ProjectExportModal from '../project/ProjectExportModal';
 import DocumentExplorer from './DocumentExplorer';
 import Editor from './Editor';
 import FileExplorer from './FileExplorer';
+import QuickOpen from './QuickOpen';
 import SearchPanel from './SearchPanel';
 import { createNamedLogger } from '@/logging';
 
@@ -390,7 +391,7 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 	const openFileByNode = useCallback(
 		async (file: FileNode, preserveView = false) => {
 			const loadedContent = await getFileContent(file.id);
-			if (!loadedContent) return;
+			if (loadedContent === undefined) return;
 
 			lastOpenedFilePathRef.current = file.path;
 			lastOpenedDocIdRef.current = null;
@@ -1473,6 +1474,8 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 					selectedProjects={[currentProjectForExport]}
 				/>
 			)}
+
+			<QuickOpen onFileSelect={handleUserFileSelect} />
 		</div>
 	);
 };
