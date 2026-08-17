@@ -215,6 +215,9 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 	const [showLatexOutput, setShowLatexOutput] = useState(false);
 	const [activeExternalProvider, setActiveExternalProvider] =
 		useState<CompilerProvider | null>(null);
+	const [compilerRegistryVersion, setCompilerRegistryVersion] = useState(
+		compilerRegistryService.getVersion(),
+	);
 	const [showTypstOutput, setShowTypstOutput] = useState(false);
 	const [temporaryLatexExpand, setTemporaryLatexExpand] = useState(false);
 	const [temporaryTypstExpand, setTemporaryTypstExpand] = useState(false);
@@ -236,6 +239,33 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 	const [currentProjectForExport, setCurrentProjectForExport] =
 		useState<Project | null>(null);
 	const [textMateRegistryReady, setTextMateRegistryReady] = useState(false);
+
+	useEffect(
+		() =>
+			compilerRegistryService.onChange(() => {
+				setCompilerRegistryVersion(compilerRegistryService.getVersion());
+			}),
+		[],
+	);
+
+	useEffect(() => {
+		const handleCompilerActive = (event: Event) => {
+			const providerId = (event as CustomEvent<{ providerId?: unknown }>).detail
+				?.providerId;
+			if (typeof providerId !== 'string') return;
+
+			const provider = compilerRegistryService.get(providerId);
+			if (!provider || provider.source === 'builtin') return;
+
+			setShowLatexOutput(false);
+			setShowTypstOutput(false);
+			setActiveExternalProvider(provider);
+		};
+
+		document.addEventListener('compiler-active', handleCompilerActive);
+		return () =>
+			document.removeEventListener('compiler-active', handleCompilerActive);
+	}, []);
 
 	const selectFileInExplorer = useCallback(
 		(file: FileNode | LinkedFileInfo) => {
@@ -293,7 +323,7 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 				provider && provider.source !== 'builtin' ? provider : null,
 			);
 		},
-		[projectType, compilerId],
+		[projectType, compilerId, compilerRegistryVersion],
 	);
 
 	const openDocumentById = useCallback(

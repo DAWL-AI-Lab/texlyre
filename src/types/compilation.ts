@@ -30,6 +30,12 @@ export interface CompileResult {
 export interface CompilerTransportConfig {
 	type: 'websocket' | 'webrtc';
 	url?: string;
+	/**
+	 * Optional shared secret for a typesetter endpoint exposed outside the
+	 * local machine. This is sent in the WebSocket request payload rather than
+	 * in the URL so it is not exposed in connection logs or referrers.
+	 */
+	authToken?: string;
 	signaling?: string[];
 	roomId?: string;
 }
@@ -44,6 +50,8 @@ export interface CompilerOutputFormat {
 export interface CompilerCapabilities {
 	outline?: boolean;
 	formatter?: string;
+	/** Identifies a LaTeX typesetter backed by a MiKTeX installation. */
+	miktex?: boolean;
 	toolbarId?: string;
 	shortcutsId?: string;
 }

@@ -44,6 +44,7 @@
 		"test:coverage": "node scripts/pm.cjs jest --coverage",
 		"test:unit": "node scripts/pm.cjs jest tests/unit",
 		"test:integration": "node scripts/pm.cjs jest tests/integration",
+		"test:remote-miktex": "node tests/integration/remote-miktex.e2e.mjs",
 		"test:components": "node scripts/pm.cjs jest tests/components",
 		"test:services": "node scripts/pm.cjs jest tests/services",
 		"test:ci": "node scripts/pm.cjs jest --ci --coverage --maxWorkers=2",

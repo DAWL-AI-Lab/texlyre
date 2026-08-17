@@ -201,6 +201,61 @@ For the dissertation example, select `C:\Users\alang\OneDrive\Master in AI\Disse
 ### Choosing a compiler
 
 - **Local MiKTeX** is recommended for Biber/biblatex projects and projects needing installed fonts or packages. Select pdfLaTeX, XeLaTeX, or LuaLaTeX from the compilation menu; it compiles a temporary copy and returns the PDF and `.synctex.gz` file.
+
+### Use MiKTeX on a remote TeXlyre server
+
+The same typesetter service can run on a trusted remote TeXlyre host. TeXlyre sends the complete project tree for each compile, and receives the compiler log, PDF, and SyncTeX file back, so the output view behaves exactly like local compilation.
+
+When the host is launched with `scripts\start-texlyre.ps1`, no client-side typesetter JSON is needed. The launcher starts MiKTeX on its loopback interface, waits until it is ready, and gives Vite a server-only proxy credential. A browser opened at a non-local HTTP(S) TeXlyre address probes the same-origin `/texlyre-typesetter` WebSocket endpoint; **Remote MiKTeX (server)** appears in the LaTeX compiler menu only after that probe returns the server's MiKTeX version. **Local MiKTeX** remains available as a separate option and addresses the browser machine's `ws://localhost:7021`, so it can coexist with the remote server compiler. The compiler port itself remains bound to the server.
+
+Treat access to the remote TeXlyre web server as permission to compile documents: the same-origin proxy deliberately makes compilation available to its users. Restrict that host to trusted users and networks; do not expose port 7021 directly. The proxy credential is stored only in `%USERPROFILE%\.local\texlyre-tools\typesetter-proxy.token` on the host and is never sent to browser JavaScript.
+
+On the remote Windows host, start the typesetter on a reachable interface and protect it with a high-entropy shared secret. Do not expose an unauthenticated compiler endpoint:
+
+```powershell
+.\scripts\start-local-latex-typesetter.ps1 `
+  -ListenAddress 0.0.0.0 `
+  -AccessToken 'replace-with-a-long-random-secret'
+```
+
+If TeXlyre is served over HTTPS, terminate TLS in a reverse proxy and use a `wss://` endpoint; browsers block an insecure `ws://` endpoint from an HTTPS page. Restrict the proxy or firewall to trusted users and networks.
+
+For a separate typesetter deployment that is not the TeXlyre host, open **Settings → External Tools → Generic Typesetter** and add this object to the existing JSON array, replacing the URL and token. The `miktex` capability is what makes the compiler appear in the normal LaTeX compiler menu. Endpoint URLs may use either `ws(s)://` or `http(s)://`; Texlyre converts the latter to the matching WebSocket scheme. After connecting, the typesetter info control reports the remote MiKTeX version returned by the server.
+
+```json
+{
+  "id": "remote-latexmk",
+  "name": "Remote MiKTeX (pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, SyncTeX)",
+  "enabled": true,
+  "projectType": "latex",
+  "projectGroup": "tex",
+  "inputExtensions": ["tex", "latex", "cls", "sty", "bib"],
+  "outputFormats": [{ "id": "pdf", "mimeType": "application/pdf" }],
+  "transportConfig": {
+    "type": "websocket",
+    "url": "wss://tex.example.org/typesetter",
+    "authToken": "replace-with-the-same-secret"
+  },
+  "capabilities": { "outline": true, "miktex": true },
+  "ui": {
+    "compile": {
+      "fields": [{
+        "key": "engine",
+        "label": "LaTeX Engine:",
+        "kind": "select",
+        "defaultValue": "lualatex",
+        "options": [
+          { "label": "pdfLaTeX", "value": "pdflatex" },
+          { "label": "XeLaTeX", "value": "xelatex" },
+          { "label": "LuaLaTeX", "value": "lualatex" }
+        ]
+      }]
+    }
+  }
+}
+```
+
+After saving the setting, open the LaTeX compilation menu and choose **Remote MiKTeX**. It is available alongside the browser compilers and any local MiKTeX endpoint. A failed endpoint stays selectable but reports a normal compiler connection error rather than silently falling back to a browser compiler.
 - **BusyTeX LuaLaTeX** is the browser-only fallback. It is convenient for quick/simple documents and has built-in SyncTeX support, but does not provide Biber. It cannot compile a project that requires Biber unless that project is changed to a supported bibliography workflow.
 
 ### SyncTeX use
@@ -298,6 +353,7 @@ The setup was validated with:
 - a successful `npm run build:local` build using Node 24;
 - an LTeX initialize handshake exposing diagnostics, completions, and quick fixes;
 - local LuaLaTeX/Biber compilation returning both a PDF and `.synctex.gz`;
+- `npm run test:remote-miktex`, which starts an authenticated MiKTeX WebSocket server and verifies that a real document returns a PDF, compiler log, and SyncTeX artifact;
 - a read-only compile of the dissertation producing a 31-page PDF;
 - a vLLM structured rewrite through the SSH tunnel.
 

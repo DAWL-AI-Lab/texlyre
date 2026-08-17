@@ -129,6 +129,17 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 	const { isOfflineMode, hideOfflineBanner } = useOffline();
 	const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 	const [showPrivacy, setShowPrivacy] = useState(false);
+	const [, setCompilerRegistryVersion] = useState(
+		compilerRegistryService.getVersion(),
+	);
+
+	useEffect(
+		() =>
+			compilerRegistryService.onChange(() => {
+				setCompilerRegistryVersion(compilerRegistryService.getVersion());
+			}),
+		[],
+	);
 
 	const shareUrl = `${window.location.origin}${window.location.pathname}#${docUrl}`;
 	const selectedDocument = doc?.documents?.find((d) => d.id === localDocId);

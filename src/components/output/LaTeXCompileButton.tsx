@@ -157,18 +157,22 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 	const projectFormat = useSharedSettings
 		? doc?.projectMetadata?.latexOutputFormat
 		: undefined;
-	const localMiKTeXProvider = compilerRegistryService.get('local-latexmk');
+	const miKTeXProviders = compilerRegistryService
+		.listForProjectType('latex')
+		.filter(
+			(provider) =>
+				provider.source === 'chelys' && provider.capabilities.miktex === true,
+		);
 
 	const handleCompilerChange = (compilerId: string) => {
-		if (!useSharedSettings || !changeDoc || compilerId === 'internal:latex') {
-			return;
-		}
+		if (!useSharedSettings || !changeDoc) return;
 
 		changeDoc((d) => {
 			if (!d.projectMetadata) {
 				d.projectMetadata = { name: '', description: '' };
 			}
-			d.projectMetadata.compilerId = compilerId;
+			d.projectMetadata.compilerId =
+				compilerId === 'internal:latex' ? undefined : compilerId;
 		});
 	};
 
@@ -852,7 +856,7 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 					</div>
 				)}
 
-				{useSharedSettings && localMiKTeXProvider && (
+				{useSharedSettings && miKTeXProviders.length > 0 && (
 					<div className='dropdown-section'>
 						<div className='dropdown-title'>{t('Compiler')}</div>
 						<select
@@ -864,9 +868,13 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 							<option value='internal:latex'>
 								{t('SwiftLaTeX & BusyTeX (browser)')}
 							</option>
-							<option value={localMiKTeXProvider.id}>
-								{localMiKTeXProvider.label}
-							</option>
+							<optgroup label={t('MiKTeX')}>
+								{miKTeXProviders.map((provider) => (
+									<option key={provider.id} value={provider.id}>
+										{provider.label}
+									</option>
+								))}
+							</optgroup>
 						</select>
 					</div>
 				)}

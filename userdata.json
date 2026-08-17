@@ -100,7 +100,8 @@
           "url": "ws://localhost:7021"
         },
         "capabilities": {
-          "outline": true
+          "outline": true,
+          "miktex": true
         },
         "ui": {
           "compile": {

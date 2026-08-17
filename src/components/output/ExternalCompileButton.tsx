@@ -258,6 +258,12 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 	const status = genericTypesetterService.getConnectionStatus(provider.id);
 	const isDisabled = isCompiling || isExporting || !effectiveMainFile;
 	const browserLatexProvider = compilerRegistryService.get('internal:latex');
+	const miKTeXProviders = compilerRegistryService
+		.listForProjectType('latex')
+		.filter(
+			(candidate) =>
+				candidate.source === 'chelys' && candidate.capabilities.miktex === true,
+		);
 
 	const handleCompilerChange = (compilerId: string) => {
 		if (!useSharedSettings || compilerId === provider.id) return;
@@ -418,7 +424,9 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 					</select>
 				</div>
 
-				{useSharedSettings && provider.id === 'local-latexmk' && browserLatexProvider && (
+				{useSharedSettings &&
+					provider.capabilities.miktex === true &&
+					browserLatexProvider && (
 					<div className='dropdown-section'>
 						<div className='dropdown-title'>{t('Compiler')}</div>
 						<select
@@ -430,7 +438,13 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 							<option value={browserLatexProvider.id}>
 								{t('SwiftLaTeX & BusyTeX (browser)')}
 							</option>
-							<option value={provider.id}>{provider.label}</option>
+							<optgroup label={t('MiKTeX')}>
+								{miKTeXProviders.map((candidate) => (
+									<option key={candidate.id} value={candidate.id}>
+										{candidate.label}
+									</option>
+								))}
+							</optgroup>
 						</select>
 					</div>
 				)}

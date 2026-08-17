@@ -54,6 +54,7 @@ interface StoredTypesetterConfig {
 	transportConfig?: unknown;
 	transportType?: unknown;
 	transportUrl?: unknown;
+	transportAuthToken?: unknown;
 	capabilities?: unknown;
 	hasOutline?: unknown;
 	formatter?: unknown;
@@ -64,6 +65,7 @@ const LEGACY_LOCAL_MIKTEX_NAME =
 	'Local MiKTeX (LuaLaTeX, Biber, SyncTeX)';
 const LOCAL_MIKTEX_NAME =
 	'Local MiKTeX (pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, SyncTeX)';
+const SAME_ORIGIN_TYPESETTER_PATH = '/texlyre-typesetter';
 
 // Existing installations keep their generic typesetter configuration in
 // localStorage. Supply the selector when upgrading the original MiKTeX config
@@ -93,6 +95,75 @@ const LOCAL_MIKTEX_UI: CompilerUISchema = {
 		],
 	},
 };
+
+const REMOTE_MIKTEX_ID = 'same-origin-remote-miktex';
+const REMOTE_MIKTEX_UI: CompilerUISchema = {
+	...LOCAL_MIKTEX_UI,
+	info: {
+		title: 'Remote MiKTeX',
+		rows: [
+			{ label: 'LaTeX Compilers:', value: 'pdfLaTeX, XeLaTeX, LuaLaTeX' },
+			{ label: 'Bibliography:', value: 'Biber' },
+			{ label: 'Source map:', value: 'SyncTeX' },
+		],
+	},
+};
+
+function isLoopbackHost(hostname: string): boolean {
+	return (
+		hostname === 'localhost' ||
+		hostname === '127.0.0.1' ||
+		hostname === '[::1]' ||
+		hostname === '::1'
+	);
+}
+
+function createSameOriginRemoteMiKTeXConfig(): TypesetterServerConfig | null {
+	if (typeof window === 'undefined' || isLoopbackHost(window.location.hostname)) {
+		return null;
+	}
+
+	return {
+		id: REMOTE_MIKTEX_ID,
+		name: 'Remote MiKTeX (server)',
+		enabled: false,
+		projectType: 'latex',
+		projectGroup: 'tex',
+		inputExtensions: ['tex', 'latex', 'cls', 'sty', 'bib'],
+		outputFormats: [{ id: 'pdf', mimeType: 'application/pdf' }],
+		transportConfig: {
+			type: 'websocket',
+			url: new URL('/texlyre-typesetter', window.location.origin).toString(),
+		},
+		capabilities: { outline: true, miktex: true },
+		ui: REMOTE_MIKTEX_UI,
+	};
+}
+
+function hasManualRemoteMiKTeX(
+	configs: TypesetterServerConfig[],
+	automaticConfig: TypesetterServerConfig | null,
+): boolean {
+	if (!automaticConfig) return false;
+
+	const automaticHost = new URL(automaticConfig.transportConfig.url).hostname;
+	return configs.some((config) => {
+		if (config.id === automaticConfig.id) return true;
+		if (config.id === 'local-latexmk') return false;
+		if (config.capabilities.miktex !== true || !config.transportConfig.url) {
+			return false;
+		}
+
+		try {
+			return (
+				new URL(config.transportConfig.url, window.location.origin).hostname ===
+				automaticHost
+			);
+		} catch {
+			return false;
+		}
+	});
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
@@ -334,7 +405,7 @@ function normalizeTransportConfig(
 	config: StoredTypesetterConfig,
 ): CompilerTransportConfig | null {
 	if (isRecord(config.transportConfig)) {
-		const { type, url, signaling, roomId } = config.transportConfig;
+		const { type, url, authToken, signaling, roomId } = config.transportConfig;
 
 		if (type !== 'websocket' && type !== 'webrtc') {
 			return null;
@@ -343,6 +414,7 @@ function normalizeTransportConfig(
 		return {
 			type,
 			...(typeof url === 'string' ? { url } : {}),
+			...(typeof authToken === 'string' ? { authToken } : {}),
 			...(Array.isArray(signaling)
 				? {
 						signaling: signaling.filter(
@@ -361,6 +433,9 @@ function normalizeTransportConfig(
 		...(typeof config.transportUrl === 'string'
 			? { url: config.transportUrl }
 			: {}),
+		...(typeof config.transportAuthToken === 'string'
+			? { authToken: config.transportAuthToken }
+			: {}),
 	};
 }
 
@@ -368,11 +443,12 @@ function normalizeCapabilities(
 	config: StoredTypesetterConfig,
 ): TypesetterServerConfig['capabilities'] {
 	if (isRecord(config.capabilities)) {
-		const { outline, formatter } = config.capabilities;
+		const { outline, formatter, miktex } = config.capabilities;
 
 		return {
 			...(typeof outline === 'boolean' ? { outline } : {}),
 			...(typeof formatter === 'string' ? { formatter } : {}),
+			...(typeof miktex === 'boolean' ? { miktex } : {}),
 		};
 	}
 
@@ -383,6 +459,7 @@ function normalizeCapabilities(
 		...(typeof config.formatter === 'string'
 			? { formatter: config.formatter }
 			: {}),
+		...(config.id === 'local-latexmk' ? { miktex: true } : {}),
 	};
 }
 
@@ -410,6 +487,25 @@ function normalizeConfig(value: unknown): TypesetterServerConfig | null {
 		return null;
 	}
 
+	// The local entry always denotes the browser machine's MiKTeX service. When
+	// TeXlyre itself is opened locally, route that connection through Vite so the
+	// launcher can keep its credential server-side. On a remote TeXlyre page,
+	// retain the localhost URL so it can coexist with the discovered server entry.
+	const isDefaultLocalMiKTeXEndpoint =
+		transportConfig.url === 'ws://localhost:7021' ||
+		transportConfig.url === 'ws://127.0.0.1:7021' ||
+		transportConfig.url === SAME_ORIGIN_TYPESETTER_PATH;
+	const shouldProxyLocalMiKTeX =
+		id === 'local-latexmk' &&
+		isDefaultLocalMiKTeXEndpoint &&
+		typeof window !== 'undefined' &&
+		isLoopbackHost(window.location.hostname);
+	const resolvedTransportConfig = shouldProxyLocalMiKTeX
+		? { ...transportConfig, url: SAME_ORIGIN_TYPESETTER_PATH }
+		: id === 'local-latexmk' &&
+				transportConfig.url === SAME_ORIGIN_TYPESETTER_PATH
+			? { ...transportConfig, url: 'ws://localhost:7021' }
+			: transportConfig;
 	const ui =
 		normalizeUISchema(config.ui) ??
 		(id === 'local-latexmk' ? LOCAL_MIKTEX_UI : undefined);
@@ -432,8 +528,11 @@ function normalizeConfig(value: unknown): TypesetterServerConfig | null {
 		...(config.incrementalSync === true ? { incrementalSync: true } : {}),
 		inputExtensions: normalizeStringArray(config.inputExtensions),
 		outputFormats: normalizeOutputFormats(config.outputFormats),
-		transportConfig,
-		capabilities: normalizeCapabilities(config),
+		transportConfig: resolvedTransportConfig,
+		capabilities: {
+			...normalizeCapabilities(config),
+			...(id === 'local-latexmk' ? { miktex: true } : {}),
+		},
 		...(inputFiles.length > 0 ? { inputFiles } : {}),
 		...(ui ? { ui } : {}),
 	};
@@ -464,6 +563,8 @@ export const TypesetterConfigProvider: React.FC<
 > = ({ children }) => {
 	const { getSetting } = useSettings();
 	const [configs, setConfigs] = useState<TypesetterServerConfig[]>([]);
+	const [isSameOriginRemoteAvailable, setIsSameOriginRemoteAvailable] =
+		useState(false);
 	const registeredIdsRef = useRef<Set<string>>(new Set());
 	const lastSerializedRef = useRef<Map<string, string>>(new Map());
 
@@ -473,10 +574,34 @@ export const TypesetterConfigProvider: React.FC<
 		() => parseConfigs(settingValue),
 		[settingValue],
 	);
+	const automaticRemoteConfig = useMemo(
+		() => createSameOriginRemoteMiKTeXConfig(),
+		[],
+	);
+	const hasManualRemote = useMemo(
+		() => hasManualRemoteMiKTeX(storedConfigs, automaticRemoteConfig),
+		[storedConfigs, automaticRemoteConfig],
+	);
+	const effectiveConfigs = useMemo(() => {
+		if (!automaticRemoteConfig || hasManualRemote) return storedConfigs;
+
+		return [
+			...storedConfigs,
+			{
+				...automaticRemoteConfig,
+				enabled: isSameOriginRemoteAvailable,
+			},
+		];
+	}, [
+		automaticRemoteConfig,
+		hasManualRemote,
+		isSameOriginRemoteAvailable,
+		storedConfigs,
+	]);
 
 	useEffect(() => {
-		setConfigs(storedConfigs);
-	}, [storedConfigs]);
+		setConfigs(effectiveConfigs);
+	}, [effectiveConfigs]);
 
 	useEffect(() => {
 		const previousIds = registeredIdsRef.current;
@@ -484,7 +609,7 @@ export const TypesetterConfigProvider: React.FC<
 		const nextIds = new Set<string>();
 		const nextSerialized = new Map<string, string>();
 
-		storedConfigs.forEach((config) => {
+		effectiveConfigs.forEach((config) => {
 			nextIds.add(config.id);
 
 			const serialized = JSON.stringify(config);
@@ -528,7 +653,28 @@ export const TypesetterConfigProvider: React.FC<
 
 		registeredIdsRef.current = nextIds;
 		lastSerializedRef.current = nextSerialized;
-	}, [storedConfigs]);
+	}, [effectiveConfigs]);
+
+	useEffect(() => {
+		if (!automaticRemoteConfig || hasManualRemote) {
+			setIsSameOriginRemoteAvailable(false);
+			return;
+		}
+
+		let cancelled = false;
+		void genericTypesetterService
+			.probe(automaticRemoteConfig.id)
+			.then(() => {
+				if (!cancelled) setIsSameOriginRemoteAvailable(true);
+			})
+			.catch(() => {
+				if (!cancelled) setIsSameOriginRemoteAvailable(false);
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [automaticRemoteConfig, hasManualRemote]);
 
 	return (
 		<TypesetterConfigContext.Provider value={{ configs }}>

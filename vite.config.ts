@@ -6,6 +6,9 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import wasm from 'vite-plugin-wasm';
 
 const useHttps = process.env.VITE_USE_HTTPS === 'true';
+const typesetterProxyTarget =
+	process.env.TEXLYRE_TYPESETTER_URL ?? 'ws://127.0.0.1:7021';
+const typesetterProxyToken = process.env.TEXLYRE_TYPESETTER_PROXY_TOKEN;
 
 const basePath = "/texlyre/";
 const appVersion = process.env.npm_package_version || '1.0.0';
@@ -141,6 +144,16 @@ export default defineConfig({
 		host: true,
 		https: useHttps,
 		proxy: {
+			// Keep MiKTeX bound to the server's loopback interface. Browsers reach
+			// it through the TeXlyre origin instead of an exposed compiler port.
+			'/texlyre-typesetter': {
+				target: typesetterProxyTarget,
+				changeOrigin: true,
+				ws: true,
+				...(typesetterProxyToken
+					? { headers: { 'x-texlyre-typesetter-token': typesetterProxyToken } }
+					: {}),
+			},
 			'/ollama': {
 				target: 'http://127.0.0.1:11434',
 				changeOrigin: true,

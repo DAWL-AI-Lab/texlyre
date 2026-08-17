@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { t } from '@/i18n';
 import type {
 	CompileArtifact,
+	CompilerCapabilities,
 	CompilerInputFile,
 	CompilerOutputFormat,
 	CompilerTransportConfig,
@@ -15,6 +16,16 @@ const moduleLog = createNamedLogger('GenericTypesetterService');
 
 type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 type StatusListener = (configId: string, status: ConnectionStatus) => void;
+type ServerInfoListener = (
+	configId: string,
+	info: TypesetterServerInfo | undefined,
+) => void;
+
+/** Runtime information reported by a compatible external typesetter. */
+export interface TypesetterServerInfo {
+	distribution: string;
+	version?: string;
+}
 
 export interface TypesetterServerConfig {
 	id: string;
@@ -27,7 +38,7 @@ export interface TypesetterServerConfig {
 	inputFiles?: CompilerInputFile[];
 	outputFormats: CompilerOutputFormat[];
 	transportConfig: CompilerTransportConfig;
-	capabilities: { outline?: boolean; formatter?: string };
+	capabilities: CompilerCapabilities;
 	ui?: CompilerUISchema;
 }
 
@@ -65,6 +76,7 @@ export interface TypesetterCompileResult {
 
 interface Connection {
 	socket: WebSocket;
+	authToken?: string;
 	pending: Map<
 		string,
 		{
@@ -81,6 +93,8 @@ class GenericTypesetterService {
 	private connections: Map<string, Connection> = new Map();
 	private connectionStatuses: Map<string, ConnectionStatus> = new Map();
 	private statusListeners: Set<StatusListener> = new Set();
+	private serverInfo: Map<string, TypesetterServerInfo> = new Map();
+	private serverInfoListeners: Set<ServerInfoListener> = new Set();
 	private hashCaches: Map<string, Map<string, HashCacheEntry>> = new Map();
 	private sentHashes: Map<string, Map<string, string>> = new Map();
 
@@ -90,9 +104,24 @@ class GenericTypesetterService {
 	}
 
 	updateConfig(configId: string, config: TypesetterServerConfig): void {
-		this.disconnect(configId);
+		const existing = this.configs.get(configId);
+		const transportChanged =
+			!existing ||
+			JSON.stringify(existing.transportConfig) !==
+				JSON.stringify(config.transportConfig);
+
+		if (transportChanged) {
+			this.disconnect(configId);
+			this.clearServerInfo(configId);
+		}
 		this.configs.set(configId, config);
-		this.setConnectionStatus(config.id, 'disconnected');
+		this.setConnectionStatus(
+			config.id,
+			!transportChanged &&
+				this.connections.get(configId)?.socket.readyState === WebSocket.OPEN
+				? 'connected'
+				: 'disconnected',
+		);
 	}
 
 	unregisterConfig(configId: string): void {
@@ -100,6 +129,7 @@ class GenericTypesetterService {
 		this.configs.delete(configId);
 		this.connectionStatuses.delete(configId);
 		this.hashCaches.delete(configId);
+		this.clearServerInfo(configId);
 	}
 
 	resetSyncState(configId: string): void {
@@ -117,6 +147,52 @@ class GenericTypesetterService {
 	onStatusChange(listener: StatusListener): () => void {
 		this.statusListeners.add(listener);
 		return () => this.statusListeners.delete(listener);
+	}
+
+	getServerInfo(configId: string): TypesetterServerInfo | undefined {
+		return this.serverInfo.get(configId);
+	}
+
+	onServerInfoChange(listener: ServerInfoListener): () => void {
+		this.serverInfoListeners.add(listener);
+		return () => this.serverInfoListeners.delete(listener);
+	}
+
+	async connect(configId: string): Promise<void> {
+		const config = this.configs.get(configId);
+		if (!config) {
+			throw new Error(`Typesetter config not found: ${configId}`);
+		}
+
+		await this.ensureConnection(config);
+	}
+
+	async probe(
+		configId: string,
+		timeoutMs = 3_000,
+	): Promise<TypesetterServerInfo> {
+		await this.connect(configId);
+
+		const existing = this.getServerInfo(configId);
+		if (existing) return existing;
+
+		const connection = this.connections.get(configId);
+		if (!connection) throw new Error('Typesetter connection was not established');
+
+		return new Promise<TypesetterServerInfo>((resolve, reject) => {
+			const timeout = window.setTimeout(() => {
+				unsubscribe();
+				reject(new Error('Typesetter server did not report its capabilities'));
+			}, timeoutMs);
+			const unsubscribe = this.onServerInfoChange((reportedConfigId, info) => {
+				if (reportedConfigId !== configId || !info) return;
+				window.clearTimeout(timeout);
+				unsubscribe();
+				resolve(info);
+			});
+
+			this.requestServerInfo(connection);
+		});
 	}
 
 	async compile(
@@ -168,6 +244,9 @@ class GenericTypesetterService {
 			connection.socket.send(
 				JSON.stringify({
 					requestId,
+					...(connection.authToken
+						? { authToken: connection.authToken }
+						: {}),
 					mainFile: request.mainFile,
 					format: request.format,
 					options: request.options ?? {},
@@ -244,13 +323,20 @@ class GenericTypesetterService {
 			);
 		}
 
-		const url = config.transportConfig.url;
-		if (!url) throw new Error(t('Typesetter transport URL is missing'));
+		const transportUrl = config.transportConfig.url;
+		if (!transportUrl) throw new Error(t('Typesetter transport URL is missing'));
+		const url = this.normalizeWebSocketUrl(transportUrl);
 
 		this.setConnectionStatus(config.id, 'connecting');
 		const socket = new WebSocket(url);
 		socket.binaryType = 'arraybuffer';
-		const connection: Connection = { socket, pending: new Map() };
+		const connection: Connection = {
+			socket,
+			pending: new Map(),
+			...(config.transportConfig.authToken
+				? { authToken: config.transportConfig.authToken }
+				: {}),
+		};
 		this.connections.set(config.id, connection);
 
 		socket.addEventListener('message', (event) => {
@@ -272,6 +358,9 @@ class GenericTypesetterService {
 		await new Promise<void>((resolve, reject) => {
 			socket.addEventListener('open', () => {
 				this.setConnectionStatus(config.id, 'connected');
+				if (config.capabilities.miktex === true) {
+					this.requestServerInfo(connection);
+				}
 				resolve();
 			});
 			socket.addEventListener('error', () =>
@@ -299,12 +388,17 @@ class GenericTypesetterService {
 		}
 
 		let payload: {
-			requestId: string;
-			status: number;
-			log: string;
-			format: string;
+			type?: string;
+			requestId?: string;
+			status?: number;
+			log?: string;
+			format?: string;
 			mimeType?: string;
 			output?: string;
+			info?: {
+				distribution?: unknown;
+				version?: unknown;
+			};
 			artifacts?: Array<{
 				id: string;
 				name: string;
@@ -318,14 +412,31 @@ class GenericTypesetterService {
 			return;
 		}
 
+		if (payload.type === 'info') {
+			if (
+				payload.status === 0 &&
+				typeof payload.info?.distribution === 'string'
+			) {
+				this.setServerInfo(configId, {
+					distribution: payload.info.distribution,
+					...(typeof payload.info.version === 'string'
+						? { version: payload.info.version }
+						: {}),
+				});
+			}
+			return;
+		}
+
+		if (typeof payload.requestId !== 'string') return;
+
 		const handler = connection.pending.get(payload.requestId);
 		if (!handler) return;
 		connection.pending.delete(payload.requestId);
 
 		handler.resolve({
-			status: payload.status,
-			log: payload.log,
-			format: payload.format,
+			status: payload.status ?? 1,
+			log: payload.log ?? '',
+			format: payload.format ?? 'pdf',
 			mimeType: payload.mimeType,
 			output: payload.output ? this.decodeBytes(payload.output) : undefined,
 			artifacts: payload.artifacts?.map((artifact) => ({
@@ -368,6 +479,64 @@ class GenericTypesetterService {
 				listener(configId, status);
 			} catch (error) {
 				moduleLog.error('Status listener error:', error);
+			}
+		});
+	}
+
+	private requestServerInfo(connection: Connection): void {
+		try {
+			connection.socket.send(
+				JSON.stringify({
+					type: 'info',
+					requestId: nanoid(),
+					...(connection.authToken
+						? { authToken: connection.authToken }
+						: {}),
+				}),
+			);
+		} catch (error) {
+			moduleLog.debug('Failed to request external typesetter information:', error);
+		}
+	}
+
+	private normalizeWebSocketUrl(url: string): string {
+		let parsed: URL;
+		try {
+			parsed =
+				typeof window === 'undefined'
+					? new URL(url)
+					: new URL(url, window.location.origin);
+		} catch {
+			throw new Error(t('Typesetter transport URL is invalid'));
+		}
+
+		if (parsed.protocol === 'http:') parsed.protocol = 'ws:';
+		if (parsed.protocol === 'https:') parsed.protocol = 'wss:';
+		if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+			throw new Error(t('Typesetter transport URL must use HTTP or WebSocket'));
+		}
+
+		return parsed.toString();
+	}
+
+	private setServerInfo(configId: string, info: TypesetterServerInfo): void {
+		this.serverInfo.set(configId, info);
+		this.serverInfoListeners.forEach((listener) => {
+			try {
+				listener(configId, info);
+			} catch (error) {
+				moduleLog.error('Typesetter server info listener error:', error);
+			}
+		});
+	}
+
+	private clearServerInfo(configId: string): void {
+		if (!this.serverInfo.delete(configId)) return;
+		this.serverInfoListeners.forEach((listener) => {
+			try {
+				listener(configId, undefined);
+			} catch (error) {
+				moduleLog.error('Typesetter server info listener error:', error);
 			}
 		});
 	}

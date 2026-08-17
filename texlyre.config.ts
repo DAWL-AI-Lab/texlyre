@@ -148,7 +148,7 @@ const config: TexlyreConfig = {
 				genericTypesetterConfigs: [
 					{
 						id: "local-latexmk",
-						name: "Local MiKTeX",
+						name: "Local MiKTeX (pdfLaTeX, XeLaTeX, LuaLaTeX, Biber, SyncTeX)",
 						enabled: true,
 						projectType: "latex",
 						projectGroup: "tex",
@@ -158,7 +158,7 @@ const config: TexlyreConfig = {
 							type: "websocket",
 							url: "ws://localhost:7021",
 						},
-						capabilities: { outline: true },
+						capabilities: { outline: true, miktex: true },
 						ui: {
 							compile: {
 								fields: [

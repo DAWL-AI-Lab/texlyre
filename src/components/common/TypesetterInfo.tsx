@@ -5,6 +5,10 @@ import { createPortal } from 'react-dom';
 
 import { t } from '@/i18n';
 import { compilerRegistryService } from '../../services/CompilerRegistryService';
+import {
+	genericTypesetterService,
+	type TypesetterServerInfo,
+} from '../../services/GenericTypesetterService';
 import type { CompilerProvider } from '../../types/compilation';
 import type { ProjectType } from '../../types/projects';
 import { resolveLabel } from '../../utils/compilerUtils';
@@ -23,9 +27,39 @@ const TypesetterInfo: React.FC<TypesetterInfoProps> = ({
 		providerProp ?? compilerRegistryService.getForProjectType(type);
 	const [showTooltip, setShowTooltip] = useState(false);
 	const [position, setPosition] = useState({ top: 0, left: 0 });
+	const [serverInfo, setServerInfo] = useState<
+		TypesetterServerInfo | undefined
+	>(() =>
+		provider?.source === 'chelys'
+			? genericTypesetterService.getServerInfo(provider.id)
+			: undefined,
+	);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const tooltipRef = useRef<HTMLDivElement>(null);
 	const isExternal = provider?.source === 'chelys';
+	const providerId = provider?.id;
+	const isMiKTeX = provider?.capabilities.miktex === true;
+
+	useEffect(() => {
+		if (!isExternal || !providerId) {
+			setServerInfo(undefined);
+			return;
+		}
+
+		setServerInfo(genericTypesetterService.getServerInfo(providerId));
+		return genericTypesetterService.onServerInfoChange((configId, info) => {
+			if (configId === providerId) setServerInfo(info);
+		});
+	}, [isExternal, providerId]);
+
+	useEffect(() => {
+		if (!showTooltip || !isExternal || !isMiKTeX || !providerId) return;
+
+		void genericTypesetterService.connect(providerId).catch(() => {
+			// The compile button reports connection failures. The info tooltip stays
+			// usable when an optional external typesetter is offline.
+		});
+	}, [isExternal, isMiKTeX, providerId, showTooltip]);
 
 	useEffect(() => {
 		if (!showTooltip || !buttonRef.current || !tooltipRef.current) return;
@@ -180,13 +214,15 @@ const TypesetterInfo: React.FC<TypesetterInfoProps> = ({
 			);
 		}
 
-		if (externalInfo) {
+		if (externalInfo || (isExternal && serverInfo)) {
 			return (
 				<>
 					<h4 className='typesetter-tooltip-title'>
-						{resolveLabel(externalInfo.title)}
+						{externalInfo
+							? resolveLabel(externalInfo.title)
+							: (provider?.label ?? type)}
 					</h4>
-					{externalInfo.rows.map((row, index) => (
+					{externalInfo?.rows.map((row, index) => (
 						<div
 							className='typesetter-tooltip-section'
 							key={`${resolveLabel(row.label)}-${index}`}
@@ -195,6 +231,17 @@ const TypesetterInfo: React.FC<TypesetterInfoProps> = ({
 							{resolveLabel(row.value)}
 						</div>
 					))}
+					{serverInfo && (
+						<div className='typesetter-tooltip-section'>
+							<strong>{t('Distribution:')}</strong> {serverInfo.distribution}
+							{serverInfo.version && (
+								<>
+									<br />
+									<strong>{t('Version:')}</strong> {serverInfo.version}
+								</>
+							)}
+						</div>
+					)}
 				</>
 			);
 		}

@@ -145,6 +145,11 @@ export const ExternalCompilerProvider: React.FC<
 			activeProviderIdRef.current = providerId;
 			setIsCompiling(true);
 			setCompileError(null);
+			document.dispatchEvent(
+				new CustomEvent('compiler-active', {
+					detail: { type: 'latex', providerId },
+				}),
+			);
 
 			try {
 				const files = await loadFiles();
@@ -161,12 +166,6 @@ export const ExternalCompilerProvider: React.FC<
 				setCompileLog(result.log);
 
 				if (result.status === 0 && result.output) {
-					document.dispatchEvent(
-						new CustomEvent('compiler-active', {
-							detail: { type: 'latex' },
-						}),
-					);
-
 					const synctex = findCompileArtifact(result.artifacts, 'synctex', [
 						'.synctex',
 						'.synctex.gz',

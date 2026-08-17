@@ -10,10 +10,12 @@ class MockWebSocket {
 	static instances: MockWebSocket[] = [];
 
 	readonly sent: string[] = [];
+	readonly url: string;
 	readyState = MockWebSocket.CONNECTING;
 	private listeners = new Map<string, Set<(event: Event) => void>>();
 
-	constructor(_url: string) {
+	constructor(url: string) {
+		this.url = url;
 		MockWebSocket.instances.push(this);
 		queueMicrotask(() => {
 			this.readyState = MockWebSocket.OPEN;
@@ -125,5 +127,124 @@ describe('GenericTypesetterService cancellation', () => {
 
 		await expect(cancelledCompilation).rejects.toThrow('Compilation cancelled');
 		await expect(replacementCompilation).resolves.toMatchObject({ status: 0 });
+	});
+
+	it('discovers a same-origin MiKTeX endpoint before registering it', async () => {
+		genericTypesetterService.updateConfig(config.id, {
+			...config,
+			transportConfig: { type: 'websocket', url: '/texlyre-typesetter' },
+			capabilities: { miktex: true },
+		});
+
+		const discovery = genericTypesetterService.probe(config.id);
+		await flushPromises();
+
+		const socket = MockWebSocket.instances[0];
+		expect(socket.url).toBe('ws://localhost/texlyre-typesetter');
+		const infoRequests = socket.sent
+			.map((message) => JSON.parse(message) as { type?: string; requestId: string })
+			.filter((request) => request.type === 'info');
+		expect(infoRequests).toHaveLength(2);
+		socket.respond({
+			type: 'info',
+			requestId: infoRequests.at(-1)?.requestId,
+			status: 0,
+			info: { distribution: 'MiKTeX', version: 'MiKTeX 26.5' },
+		});
+
+		await expect(discovery).resolves.toEqual({
+			distribution: 'MiKTeX',
+			version: 'MiKTeX 26.5',
+		});
+	});
+
+	it('sends the complete project and maps a remote PDF, log, and artifacts', async () => {
+		genericTypesetterService.updateConfig(config.id, {
+			...config,
+			transportConfig: {
+				...config.transportConfig,
+				url: 'http://test-typesetter',
+				authToken: 'test-access-token',
+			},
+			capabilities: { miktex: true },
+		});
+
+		const compilation = genericTypesetterService.compile(config.id, {
+			mainFile: '/main.tex',
+			format: 'pdf',
+			files: [
+				{
+					path: '/main.tex',
+					content: new TextEncoder().encode('\\documentclass{article}'),
+				},
+			],
+			options: { engine: 'pdflatex' },
+		});
+		await flushPromises();
+
+		const socket = MockWebSocket.instances[0];
+		expect(socket.url).toBe('ws://test-typesetter/');
+		const infoRequest = JSON.parse(
+			socket.sent.find((message) => JSON.parse(message).type === 'info') ?? '',
+		) as { requestId: string; authToken: string };
+		expect(infoRequest.authToken).toBe('test-access-token');
+		socket.respond({
+			type: 'info',
+			requestId: infoRequest.requestId,
+			status: 0,
+			info: { distribution: 'MiKTeX', version: 'MiKTeX 26.5' },
+		});
+		expect(genericTypesetterService.getServerInfo(config.id)).toEqual({
+			distribution: 'MiKTeX',
+			version: 'MiKTeX 26.5',
+		});
+
+		const request = JSON.parse(
+			socket.sent.find((message) => JSON.parse(message).type !== 'info') ?? '',
+		) as {
+			requestId: string;
+			authToken: string;
+			files: Array<{ path: string; content: string }>;
+			options: { engine: string };
+		};
+		expect(request.authToken).toBe('test-access-token');
+		expect(request.options.engine).toBe('pdflatex');
+		expect(request.files).toEqual([
+			{
+				path: '/main.tex',
+				content: btoa('\\documentclass{article}'),
+			},
+		]);
+
+		socket.respond({
+			requestId: request.requestId,
+			status: 0,
+			log: 'remote MiKTeX log',
+			format: 'pdf',
+			mimeType: 'application/pdf',
+			output: btoa('%PDF'),
+			artifacts: [
+				{
+					id: 'synctex',
+					name: 'main.synctex.gz',
+					mimeType: 'application/gzip',
+					data: btoa('synctex'),
+				},
+			],
+		});
+
+		await expect(compilation).resolves.toMatchObject({
+			status: 0,
+			log: 'remote MiKTeX log',
+			mimeType: 'application/pdf',
+			output: new Uint8Array([37, 80, 68, 70]),
+			artifacts: [
+				{
+					id: 'synctex',
+					name: 'main.synctex.gz',
+					data: new Uint8Array([115, 121, 110, 99, 116, 101, 120]),
+				},
+			],
+		});
 	});
 });
