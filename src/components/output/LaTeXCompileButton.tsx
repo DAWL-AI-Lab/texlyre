@@ -187,12 +187,16 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 		format: effectiveFormat,
 		engine: effectiveEngine,
 		isCompiling,
+		stopCompilation,
 	});
+	const autoCompileRequestRef = useRef<number | null>(null);
+	const nextAutoCompileRequestIdRef = useRef(0);
 	compileStateRef.current = {
 		mainFile: effectiveMainFile,
 		format: effectiveFormat,
 		engine: effectiveEngine,
 		isCompiling,
+		stopCompilation,
 	};
 
 	useEffect(() => {
@@ -341,18 +345,34 @@ const LaTeXCompileButton: React.FC<LaTeXCompileButtonProps> = ({
 
 		const handleFileSaved = async () => {
 			const state = compileStateRef.current;
-			if (state.isCompiling) return;
-			if (!state.mainFile) return;
+			const requestId = ++nextAutoCompileRequestIdRef.current;
+			autoCompileRequestRef.current = requestId;
 
-			if (onExpandLatexOutput) {
-				onExpandLatexOutput();
+			// A save always supersedes the current compilation. Calling this even
+			// before React has rendered the latest state is safe: it is a no-op when
+			// the compiler is idle.
+			state.stopCompilation();
+
+			if (!state.mainFile) {
+				autoCompileRequestRef.current = null;
+				return;
 			}
 
-			if (state.engine !== latexService.getCurrentEngineType()) {
-				await latexService.setEngine(state.engine);
-			}
+			try {
+				if (onExpandLatexOutput) {
+					onExpandLatexOutput();
+				}
 
-			await compileDocument(state.mainFile, state.format);
+				if (state.engine !== latexService.getCurrentEngineType()) {
+					await latexService.setEngine(state.engine);
+				}
+
+				await compileDocument(state.mainFile, state.format);
+			} finally {
+				if (autoCompileRequestRef.current === requestId) {
+					autoCompileRequestRef.current = null;
+				}
+			}
 		};
 
 		document.addEventListener('file-saved', handleFileSaved);

@@ -117,9 +117,7 @@ export abstract class BaseEngine {
 	stopCompilation(): void {
 		if (this.isCompiling() && this.engine) {
 			try {
-				this.engine.closeWorker();
-				this.setStatus('error');
-				this.status = 'ready';
+				this.cleanup();
 			} catch (error) {
 				moduleLog.warn('Error stopping compilation:', error);
 			}

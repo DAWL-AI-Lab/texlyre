@@ -151,6 +151,10 @@ class GenericTypesetterService {
 		return result;
 	}
 
+	cancelCompilation(configId: string): void {
+		this.disconnect(configId, new Error('Compilation cancelled'));
+	}
+
 	private send(
 		connection: Connection,
 		request: TypesetterCompileRequest,
@@ -250,16 +254,19 @@ class GenericTypesetterService {
 		this.connections.set(config.id, connection);
 
 		socket.addEventListener('message', (event) => {
-			this.handleMessage(config.id, event.data);
+			this.handleMessage(config.id, connection, event.data);
 		});
 		socket.addEventListener('close', () => {
+			if (this.connections.get(config.id) !== connection) return;
 			this.failPending(config.id, new Error('Connection closed'));
 			this.setConnectionStatus(config.id, 'disconnected');
 			this.connections.delete(config.id);
 			this.sentHashes.delete(config.id);
 		});
 		socket.addEventListener('error', () => {
-			this.setConnectionStatus(config.id, 'error');
+			if (this.connections.get(config.id) === connection) {
+				this.setConnectionStatus(config.id, 'error');
+			}
 		});
 
 		await new Promise<void>((resolve, reject) => {
@@ -274,14 +281,22 @@ class GenericTypesetterService {
 					),
 				),
 			);
+			socket.addEventListener('close', () =>
+				reject(new Error('Connection closed')),
+			);
 		});
 
 		return connection;
 	}
 
-	private handleMessage(configId: string, data: unknown): void {
-		const connection = this.connections.get(configId);
-		if (!connection || typeof data !== 'string') return;
+	private handleMessage(
+		configId: string,
+		connection: Connection,
+		data: unknown,
+	): void {
+		if (this.connections.get(configId) !== connection || typeof data !== 'string') {
+			return;
+		}
 
 		let payload: {
 			requestId: string;
@@ -322,11 +337,14 @@ class GenericTypesetterService {
 		});
 	}
 
-	private disconnect(configId: string): void {
+	private disconnect(
+		configId: string,
+		error: Error = new Error('Connection reset'),
+	): void {
 		this.sentHashes.delete(configId);
 		const connection = this.connections.get(configId);
 		if (!connection) return;
-		this.failPending(configId, new Error('Connection reset'));
+		this.failPending(configId, error);
 		connection.socket.close();
 		this.connections.delete(configId);
 	}

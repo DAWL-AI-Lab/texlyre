@@ -5,6 +5,7 @@ import {
 	createContext,
 	useEffect,
 	useCallback,
+	useRef,
 	useState,
 } from 'react';
 
@@ -50,6 +51,7 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 		'idle' | 'success' | 'error'
 	>('idle');
 	const [activeCompiler, setActiveCompiler] = useState<string | null>(null);
+	const compilationGenerationRef = useRef(0);
 
 	const latexEngine =
 		(getSetting('latex-engine')?.value as LaTeXEngine) ?? 'pdftex';
@@ -102,14 +104,19 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 		mainFileName: string,
 		format: LaTeXOutputFormat = currentFormat,
 	): Promise<void> => {
+		const compilationGeneration = ++compilationGenerationRef.current;
+		const isCurrentCompilation = () =>
+			compilationGeneration === compilationGenerationRef.current;
+
 		try {
 			const engineToUse = latexService.getCurrentEngineType();
 			if (!latexService.isReady()) {
 				await latexService.initialize(engineToUse);
 			}
 		} finally {
-			setIsInitializing(false);
+			if (isCurrentCompilation()) setIsInitializing(false);
 		}
+		if (!isCurrentCompilation()) return;
 
 		setIsCompiling(true);
 		setCompileError(null);
@@ -124,6 +131,7 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 				fileTree,
 				format,
 			);
+			if (!isCurrentCompilation()) return;
 
 			setCompileLog(result.log);
 			if (result.status === 0 && result.pdf) {
@@ -176,6 +184,8 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 
 			await refreshFileTree();
 		} catch (error) {
+			if (!isCurrentCompilation()) return;
+
 			setCompileError(
 				error instanceof Error ? error.message : t('Unknown error'),
 			);
@@ -187,7 +197,7 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 				error instanceof Error ? error.message : t('Unknown error'),
 			);
 		} finally {
-			setIsCompiling(false);
+			if (isCurrentCompilation()) setIsCompiling(false);
 		}
 	};
 
@@ -223,7 +233,8 @@ export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
 	}, [getSetting, hasAutoCompiled]);
 
 	const stopCompilation = () => {
-		if (isCompiling && latexService.isCompiling()) {
+		if (latexService.isCompiling()) {
+			compilationGenerationRef.current++;
 			latexService.stopCompilation();
 			latexService.dismissCurrentNotification();
 			setIsCompiling(false);

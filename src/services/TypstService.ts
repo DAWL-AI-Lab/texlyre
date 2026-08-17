@@ -91,7 +91,8 @@ class TypstService {
 		const operationId = `typst-compile-${nanoid()}`;
 		this.currentOperationId = operationId;
 		const normalizedMain = this.normalizePath(mainFileName);
-		const signal = this.beginOperation();
+		const controller = this.beginOperation();
+		const signal = controller.signal;
 
 		try {
 			this.showLoadingNotification(
@@ -166,7 +167,7 @@ class TypstService {
 			const log = this.logFromError(error);
 			return this.failCompile(operationId, format, normalizedMain, log);
 		} finally {
-			this.endOperation();
+			this.endOperation(controller);
 		}
 	}
 
@@ -184,7 +185,8 @@ class TypstService {
 		if (!this.isReady()) await this.initialize();
 
 		const normalizedMain = this.normalizePath(mainFileName);
-		const signal = this.beginOperation();
+		const controller = this.beginOperation();
+		const signal = controller.signal;
 
 		try {
 			this.showLoadingNotification(
@@ -253,7 +255,7 @@ class TypstService {
 				format,
 			});
 		} finally {
-			this.endOperation();
+			this.endOperation(controller);
 		}
 	}
 
@@ -330,13 +332,14 @@ class TypstService {
 			notificationService.showInfo(message, options);
 	}
 
-	private beginOperation(): AbortSignal {
+	private beginOperation(): AbortController {
 		this.setStatus('compiling');
 		this.compilationAbortController = new AbortController();
-		return this.compilationAbortController.signal;
+		return this.compilationAbortController;
 	}
 
-	private endOperation(): void {
+	private endOperation(controller: AbortController): void {
+		if (this.compilationAbortController !== controller) return;
 		this.setStatus('ready');
 		this.compilationAbortController = null;
 	}

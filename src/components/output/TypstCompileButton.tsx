@@ -142,7 +142,10 @@ const TypstCompileButton: React.FC<TypstCompileButtonProps> = ({
 		sharedPdfOptions: doc?.projectMetadata?.typstPdfOptions,
 		shareFormat: !!projectFormat,
 		isCompiling,
+		stopCompilation,
 	});
+	const autoCompileRequestRef = useRef<number | null>(null);
+	const nextAutoCompileRequestIdRef = useRef(0);
 	compileStateRef.current = {
 		mainFile: effectiveMainFile,
 		format: effectiveFormat,
@@ -150,6 +153,7 @@ const TypstCompileButton: React.FC<TypstCompileButtonProps> = ({
 		sharedPdfOptions: doc?.projectMetadata?.typstPdfOptions,
 		shareFormat: !!projectFormat,
 		isCompiling,
+		stopCompilation,
 	};
 
 	useEffect(() => {
@@ -265,8 +269,18 @@ const TypstCompileButton: React.FC<TypstCompileButtonProps> = ({
 
 		const handleFileSaved = async () => {
 			const state = compileStateRef.current;
-			if (state.isCompiling) return;
-			if (!state.mainFile) return;
+			const requestId = ++nextAutoCompileRequestIdRef.current;
+			autoCompileRequestRef.current = requestId;
+
+			// A save always supersedes the current compilation. Calling this even
+			// before React has rendered the latest state is safe: it is a no-op when
+			// the compiler is idle.
+			state.stopCompilation();
+
+			if (!state.mainFile) {
+				autoCompileRequestRef.current = null;
+				return;
+			}
 
 			const pdfOptions =
 				state.format === 'pdf' || state.format === 'canvas-pdf'
@@ -275,11 +289,17 @@ const TypstCompileButton: React.FC<TypstCompileButtonProps> = ({
 						: state.pdfOptions
 					: undefined;
 
-			if (onExpandTypstOutput) {
-				onExpandTypstOutput();
-			}
+			try {
+				if (onExpandTypstOutput) {
+					onExpandTypstOutput();
+				}
 
-			await compileDocument(state.mainFile, state.format, pdfOptions);
+				await compileDocument(state.mainFile, state.format, pdfOptions);
+			} finally {
+				if (autoCompileRequestRef.current === requestId) {
+					autoCompileRequestRef.current = null;
+				}
+			}
 		};
 
 		document.addEventListener('file-saved', handleFileSaved);

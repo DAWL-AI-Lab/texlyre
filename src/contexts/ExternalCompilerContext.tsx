@@ -1,6 +1,12 @@
 // src/contexts/ExternalCompilerContext.tsx
 import type React from 'react';
-import { type ReactNode, createContext, useCallback, useState } from 'react';
+import {
+	type ReactNode,
+	createContext,
+	useCallback,
+	useRef,
+	useState,
+} from 'react';
 
 import { useFileTree } from '../hooks/useFileTree';
 import { compilerRegistryService } from '../services/CompilerRegistryService';
@@ -42,6 +48,7 @@ interface ExternalCompilerContextType {
 		format?: string,
 		options?: Record<string, string | number | boolean>,
 	) => Promise<void>;
+	stopCompilation: () => void;
 	exportDocument: (
 		providerId: string,
 		mainFileName: string,
@@ -87,6 +94,8 @@ export const ExternalCompilerProvider: React.FC<
 	const [logIndicator, setLogIndicator] = useState<
 		'idle' | 'success' | 'error'
 	>('idle');
+	const compilationGenerationRef = useRef(0);
+	const activeProviderIdRef = useRef<string | null>(null);
 
 	const toggleOutputView = useCallback(() => {
 		setCurrentView((view) => (view === 'log' ? 'output' : 'log'));
@@ -122,23 +131,32 @@ export const ExternalCompilerProvider: React.FC<
 			format = 'pdf',
 			options?: Record<string, string | number | boolean>,
 		) => {
+			const compilationGeneration = ++compilationGenerationRef.current;
+			const isCurrentCompilation = () =>
+				compilationGeneration === compilationGenerationRef.current;
 			const provider = compilerRegistryService.get(providerId);
 			if (!provider) {
-				setCompileError(`Compiler not found: ${providerId}`);
+				if (isCurrentCompilation()) {
+					setCompileError(`Compiler not found: ${providerId}`);
+				}
 				return;
 			}
 
+			activeProviderIdRef.current = providerId;
 			setIsCompiling(true);
 			setCompileError(null);
 
 			try {
 				const files = await loadFiles();
+				if (!isCurrentCompilation()) return;
+
 				const result = await genericTypesetterService.compile(providerId, {
 					mainFile: mainFileName,
 					format,
 					files,
 					options,
 				});
+				if (!isCurrentCompilation()) return;
 
 				setCompileLog(result.log);
 
@@ -196,6 +214,8 @@ export const ExternalCompilerProvider: React.FC<
 					popoutViewerService.sendCompileResult(result.status, result.log);
 				}
 			} catch (error) {
+				if (!isCurrentCompilation()) return;
+
 				latexSourceMapService.clear();
 				const message = error instanceof Error ? error.message : String(error);
 				setCompileError(message);
@@ -203,11 +223,26 @@ export const ExternalCompilerProvider: React.FC<
 				setCurrentView('log');
 				popoutViewerService.sendCompileResult(-1, message);
 			} finally {
-				setIsCompiling(false);
+				if (isCurrentCompilation()) {
+					activeProviderIdRef.current = null;
+					setIsCompiling(false);
+				}
 			}
 		},
 		[loadFiles],
 	);
+
+	const stopCompilation = useCallback(() => {
+		const providerId = activeProviderIdRef.current;
+		if (!providerId) return;
+
+		compilationGenerationRef.current++;
+		activeProviderIdRef.current = null;
+		genericTypesetterService.cancelCompilation(providerId);
+		setIsCompiling(false);
+		setCompileError('Compilation stopped by user');
+		setLogIndicator('idle');
+	}, []);
 
 	const exportDocument = useCallback(
 		async (
@@ -306,6 +341,7 @@ export const ExternalCompilerProvider: React.FC<
 				logIndicator,
 				toggleOutputView,
 				compileDocument,
+				stopCompilation,
 				exportDocument,
 				clearCache,
 			}}

@@ -5,6 +5,7 @@ import {
 	createContext,
 	useEffect,
 	useCallback,
+	useRef,
 	useState,
 } from 'react';
 
@@ -50,6 +51,7 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 		'idle' | 'success' | 'error'
 	>('idle');
 	const [activeCompiler, setActiveCompiler] = useState<string | null>(null);
+	const compilationGenerationRef = useRef(0);
 
 	const currentFormat =
 		(getSetting('typst-default-format')?.value as TypstOutputFormat) ?? 'pdf';
@@ -80,6 +82,10 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 		format: TypstOutputFormat = currentFormat,
 		pdfOptions?: TypstPdfOptions,
 	): Promise<void> => {
+		const compilationGeneration = ++compilationGenerationRef.current;
+		const isCurrentCompilation = () =>
+			compilationGeneration === compilationGenerationRef.current;
+
 		moduleLog.info('compileDocument called', {
 			mainFileName,
 			format,
@@ -95,6 +101,8 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 			try {
 				await typstService.initialize();
 			} catch (error) {
+				if (!isCurrentCompilation()) return;
+
 				const message =
 					error instanceof Error ? error.message : t('Unknown error');
 
@@ -104,9 +112,10 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 				popoutViewerService.sendCompileResult(-1, message);
 				return;
 			} finally {
-				setIsInitializing(false);
+				if (isCurrentCompilation()) setIsInitializing(false);
 			}
 		}
+		if (!isCurrentCompilation()) return;
 
 		setIsCompiling(true);
 		setActiveCompiler('typst');
@@ -122,6 +131,7 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 				pdfOptions,
 				{ allowRemoteUrls: previewAllowRemoteUrls },
 			);
+			if (!isCurrentCompilation()) return;
 
 			moduleLog.info('Compilation result', {
 				status: result.status,
@@ -221,6 +231,8 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 
 			await refreshFileTree();
 		} catch (error) {
+			if (!isCurrentCompilation()) return;
+
 			const message =
 				error instanceof Error ? error.message : t('Unknown error');
 
@@ -230,7 +242,7 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 
 			popoutViewerService.sendCompileResult(-1, message);
 		} finally {
-			setIsCompiling(false);
+			if (isCurrentCompilation()) setIsCompiling(false);
 		}
 	};
 
@@ -257,7 +269,8 @@ export const TypstProvider: React.FC<TypstProviderProps> = ({ children }) => {
 	}, [getSetting, hasAutoCompiled]);
 
 	const stopCompilation = () => {
-		if (isCompiling) {
+		if (typstService.isCompiling()) {
+			compilationGenerationRef.current++;
 			typstService.stopCompilation();
 			setIsCompiling(false);
 			setCompileError('Compilation stopped by user');

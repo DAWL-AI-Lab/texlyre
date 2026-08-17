@@ -53,8 +53,13 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 	linkedFileInfo,
 	useSharedSettings = false,
 }) => {
-	const { isCompiling, isExporting, compileDocument, clearCache } =
-		useExternalCompiler();
+	const {
+		isCompiling,
+		isExporting,
+		compileDocument,
+		stopCompilation,
+		clearCache,
+	} = useExternalCompiler();
 	const { selectedFileId, getFile, fileTree } = useFileTree();
 	const { changeData: changeDoc } = useCollab<DocumentList>();
 	const { getProperty, setProperty, registerProperty } = useProperties();
@@ -194,16 +199,35 @@ const ExternalCompileButton: React.FC<ExternalCompileButtonProps> = ({
 		onExpandExternalOutput,
 	]);
 
-	const compileStateRef = useRef({ isCompiling, handleCompile });
-	compileStateRef.current = { isCompiling, handleCompile };
+	const compileStateRef = useRef({
+		isCompiling,
+		handleCompile,
+		stopCompilation,
+	});
+	const autoCompileRequestRef = useRef<number | null>(null);
+	const nextAutoCompileRequestIdRef = useRef(0);
+	compileStateRef.current = { isCompiling, handleCompile, stopCompilation };
 
 	useEffect(() => {
 		if (!useSharedSettings || !effectiveAutoCompileOnSave) return;
 
 		const handleFileSaved = async () => {
 			const state = compileStateRef.current;
-			if (state.isCompiling) return;
-			await state.handleCompile();
+			const requestId = ++nextAutoCompileRequestIdRef.current;
+			autoCompileRequestRef.current = requestId;
+
+			// A save always supersedes the current compilation. Calling this even
+			// before React has rendered the latest state is safe: it is a no-op when
+			// the compiler is idle.
+			state.stopCompilation();
+
+			try {
+				await state.handleCompile();
+			} finally {
+				if (autoCompileRequestRef.current === requestId) {
+					autoCompileRequestRef.current = null;
+				}
+			}
 		};
 
 		document.addEventListener('file-saved', handleFileSaved);
