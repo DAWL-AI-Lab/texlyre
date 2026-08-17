@@ -1,0 +1,3 @@
+# WebPerl's data image is indexed by byte offset in emperl.js. Treat it as
+# binary so Git never changes its line endings during checkout.
+public/core/webperl/emperl.data -text

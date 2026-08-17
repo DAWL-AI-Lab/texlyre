@@ -6,6 +6,7 @@ const { copyTypstAssets } = require('./copy-typst-assets.cjs');
 const { copyOnigurumaWasm } = require('./copy-oniguruma-wasm.cjs');
 const { downloadGrammars } = require('./download-grammars.cjs');
 const { downloadCoreAssets } = require('./download-core-assets.cjs');
+const { ensureWebPerlData } = require('./ensure-webperl-data.cjs');
 
 async function setupAssets() {
 	console.log('=== Setting up assets ===\n');
@@ -18,6 +19,7 @@ async function setupAssets() {
 		await copyOnigurumaWasm();
 		await downloadGrammars();
 		await downloadCoreAssets();
+		await ensureWebPerlData();
 		console.log('\n✅ Asset setup complete');
 	} catch (err) {
 		console.error('\n❌ Asset setup failed:', err);
