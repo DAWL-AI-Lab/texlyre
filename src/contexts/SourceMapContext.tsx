@@ -274,14 +274,17 @@ export const SourceMapProvider: React.FC<SourceMapProviderProps> = ({
 
 				document.dispatchEvent(
 					new CustomEvent('navigate-to-compiled-file', {
-						detail: { filePath: targetFile.path },
+						detail: {
+							filePath: targetFile.path,
+							preserveOutput: true,
+						},
 					}),
 				);
 
 				gotoEditor(
 					target,
 					{ line: result.line, column: result.column },
-					{ waitForReady: false },
+					{ waitForReady: true },
 				);
 			} catch (error) {
 				moduleLog.error('Reverse sync navigation failed:', error);

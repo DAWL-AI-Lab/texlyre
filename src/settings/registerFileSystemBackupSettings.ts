@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react';
 import { t } from '@/i18n';
 import { useSettings } from '../hooks/useSettings';
 
+const DEFAULT_BACKUP_HISTORY_LIMIT = 10;
+
 export function useRegisterFileSystemBackupSettings() {
 	const { registerSetting, getSetting } = useSettings();
 	const registered = useRef(false);
@@ -22,6 +24,12 @@ export function useRegisterFileSystemBackupSettings() {
 			(getSetting('file-sys-backup-timed-enable')?.value as boolean) ?? false;
 		const initialTimedBackupInterval =
 			(getSetting('file-sys-backup-timed-interval')?.value as number) ?? 15;
+		const initialBackupHistoryEnabled =
+			(getSetting('file-sys-backup-history-enable')?.value as boolean) ??
+			false;
+		const initialBackupHistoryLimit =
+			(getSetting('file-sys-backup-history-limit')?.value as number) ??
+			DEFAULT_BACKUP_HISTORY_LIMIT;
 
 		registerSetting({
 			id: 'file-sys-backup-enable',
@@ -63,6 +71,48 @@ export function useRegisterFileSystemBackupSettings() {
 			defaultValue: initialBackupOnSave,
 			dependsOn: { id: 'file-sys-backup-enable', value: true, nest: true },
 			disabledReason: t('Requires: File system backup'),
+		});
+
+		registerSetting({
+			id: 'file-sys-backup-history-enable',
+			category: t('Backup'),
+			subcategory: t('File System'),
+			type: 'checkbox',
+			label: t('Keep a ZIP backup history'),
+			description: t(
+				'Save a ZIP copy of each backup in the history folder',
+			),
+			defaultValue: initialBackupHistoryEnabled,
+			dependsOn: { id: 'file-sys-backup-enable', value: true, nest: true },
+			disabledReason: t('Requires: File system backup'),
+		});
+
+		registerSetting({
+			id: 'file-sys-backup-history-limit',
+			category: t('Backup'),
+			subcategory: t('File System'),
+			type: 'number',
+			label: t('ZIP backup history limit'),
+			description: t(
+				'Maximum number of ZIP backups to keep; the oldest is removed when the limit is exceeded',
+			),
+			defaultValue: initialBackupHistoryLimit,
+			min: 1,
+			max: 1000,
+			step: 1,
+			validate: (value) =>
+				typeof value === 'number' &&
+				Number.isFinite(value) &&
+				Number.isInteger(value) &&
+				value >= 1 &&
+				value <= 1000,
+			liveUpdate: true,
+			dependsOn: {
+				id: 'file-sys-backup-history-enable',
+				value: true,
+				nest: true,
+			},
+			disabledReason: t('Requires: ZIP backup history'),
 		});
 
 		registerSetting({

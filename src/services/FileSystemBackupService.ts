@@ -13,12 +13,18 @@ import { projectImportService } from './ProjectImportService';
 import {
 	DirectoryAdapter,
 	StorageAdapterService,
+	ZipAdapter,
 } from './StorageAdapterService';
 import { createNamedLogger } from '@/logging';
 
 const moduleLog = createNamedLogger('FileSystemBackupService');
+const BACKUP_HISTORY_DIRECTORY = 'history';
+const BACKUP_HISTORY_FILE_PREFIX = 'backup-';
+const BACKUP_HISTORY_FILE_SUFFIX = '.zip';
+const BACKUP_HISTORY_FILE_PATTERN = /^backup-\d{13}\.zip$/;
+const DEFAULT_BACKUP_HISTORY_LIMIT = 10;
 
-class FileSystemBackupService {
+export class FileSystemBackupService {
 	private rootHandle: FileSystemDirectoryHandle | null = null;
 	private handleDb: IDBDatabase | null = null;
 	private isEnabled = false;
@@ -34,6 +40,9 @@ class FileSystemBackupService {
 	private unifiedService = new UnifiedDataStructureService();
 	private activities: BackupActivity[] = [];
 	private activityListeners: Array<(activities: BackupActivity[]) => void> = [];
+	private backupHistoryEnabled = false;
+	private backupHistoryLimit = DEFAULT_BACKUP_HISTORY_LIMIT;
+	private lastBackupHistoryTimestamp = 0;
 	private discoveryListeners: Array<(result: BackupDiscoveryResult) => void> =
 		[];
 	private exportQueue: Promise<void> = Promise.resolve();
@@ -174,6 +183,11 @@ class FileSystemBackupService {
 		this.updateStatus({ isEnabled: enabled });
 	}
 
+	setBackupHistoryOptions(enabled: boolean, limit: number): void {
+		this.backupHistoryEnabled = enabled;
+		this.backupHistoryLimit = this.normalizeBackupHistoryLimit(limit);
+	}
+
 	exportToFileSystem(projectId?: string): Promise<void> {
 		const exportTask = this.exportQueue.then(() =>
 			this.performExportToFileSystem(projectId),
@@ -204,6 +218,7 @@ class FileSystemBackupService {
 			const adapter = new DirectoryAdapter(this.rootHandle!);
 
 			await this.fileSystemManager.writeUnifiedStructure(adapter, exportData);
+			await this.writeBackupHistory(exportData);
 
 			this.addActivity({
 				type: 'backup_complete',
@@ -386,6 +401,72 @@ class FileSystemBackupService {
 			moduleLog.warn('Could not read existing backup data:', error);
 			return { projects: [], projectData: new Map() };
 		}
+	}
+
+	private async writeBackupHistory(exportData: {
+		manifest: any;
+		account: any;
+		projects: any[];
+		projectData: Map<string, any>;
+	}): Promise<void> {
+		if (!this.backupHistoryEnabled || !this.rootHandle) return;
+
+		const zipAdapter = new ZipAdapter();
+		await this.fileSystemManager.writeUnifiedStructure(zipAdapter, exportData);
+
+		const archive = await zipAdapter.generateZip();
+		const archiveName = this.createBackupHistoryFileName();
+		const adapter = new DirectoryAdapter(this.rootHandle);
+		await adapter.writeFile(
+			`${BACKUP_HISTORY_DIRECTORY}/${archiveName}`,
+			new Uint8Array(await archive.arrayBuffer()),
+		);
+
+		await this.pruneBackupHistory();
+	}
+
+	private async pruneBackupHistory(): Promise<void> {
+		if (!this.rootHandle) return;
+
+		const historyDirectory = await this.rootHandle.getDirectoryHandle(
+			BACKUP_HISTORY_DIRECTORY,
+		);
+		const archiveNames: string[] = [];
+
+		for await (const [name, entry] of (historyDirectory as any).entries()) {
+			if (entry.kind === 'file' && this.isBackupHistoryFile(name)) {
+				archiveNames.push(name);
+			}
+		}
+
+		const archivesToRemove = archiveNames
+			.sort()
+			.slice(0, Math.max(0, archiveNames.length - this.backupHistoryLimit));
+
+		await Promise.all(
+			archivesToRemove.map((archiveName) =>
+				historyDirectory.removeEntry(archiveName),
+			),
+		);
+	}
+
+	private createBackupHistoryFileName(): string {
+		this.lastBackupHistoryTimestamp = Math.max(
+			Date.now(),
+			this.lastBackupHistoryTimestamp + 1,
+		);
+		return `${BACKUP_HISTORY_FILE_PREFIX}${this.lastBackupHistoryTimestamp
+			.toString()
+			.padStart(13, '0')}${BACKUP_HISTORY_FILE_SUFFIX}`;
+	}
+
+	private isBackupHistoryFile(fileName: string): boolean {
+		return BACKUP_HISTORY_FILE_PATTERN.test(fileName);
+	}
+
+	private normalizeBackupHistoryLimit(limit: number): number {
+		if (!Number.isFinite(limit)) return DEFAULT_BACKUP_HISTORY_LIMIT;
+		return Math.min(1000, Math.max(1, Math.floor(limit)));
 	}
 
 	private mergeProjectsData(

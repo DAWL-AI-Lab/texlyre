@@ -911,7 +911,7 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 
 		const handleNavigateToCompiledFile = async (event: Event) => {
 			const customEvent = event as CustomEvent;
-			const { filePath } = customEvent.detail;
+			const { filePath, preserveOutput = false } = customEvent.detail;
 
 			if (!filePath) return;
 
@@ -919,13 +919,17 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 			if (!targetFile) return;
 
 			if (targetFile.documentId) {
-				openDocumentById(targetFile.documentId, 'files');
-				pushEditorRoute(targetFile.documentId, targetFile.path);
+				openDocumentById(targetFile.documentId, 'files', preserveOutput);
+				if (!preserveOutput) {
+					pushEditorRoute(targetFile.documentId, targetFile.path);
+				}
 				return;
 			}
 
-			await openFileByNode(targetFile);
-			pushEditorRoute(undefined, targetFile.path);
+			await openFileByNode(targetFile, preserveOutput);
+			if (!preserveOutput) {
+				pushEditorRoute(undefined, targetFile.path);
+			}
 		};
 
 		document.addEventListener(

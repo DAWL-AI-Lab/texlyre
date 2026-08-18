@@ -86,6 +86,8 @@ const config: TexlyreConfig = {
 				fileSyncServerUrl: "https://filepizza.texlyre.org",
 				fileSysBackupAutoBackup: false,
 				fileSysBackupEnable: true,
+				fileSysBackupHistoryEnable: false,
+				fileSysBackupHistoryLimit: 10,
 				fileTreeFilesystemDragDrop: true,
 				fileTreeInternalDragDrop: true,
 				imageViewerAutoCenter: true,

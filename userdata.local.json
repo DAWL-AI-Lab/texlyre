@@ -28,6 +28,8 @@
     "file-sync-server-url": "http://localhost:8080",
     "file-sys-backup-auto-backup": false,
     "file-sys-backup-enable": true,
+    "file-sys-backup-history-enable": false,
+    "file-sys-backup-history-limit": 10,
     "file-tree-filesystem-drag-drop": true,
     "file-tree-internal-drag-drop": true,
     "image-viewer-auto-center": true,

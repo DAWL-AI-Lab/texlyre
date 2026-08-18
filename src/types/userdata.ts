@@ -35,6 +35,8 @@ export interface UserDataSettings {
 	fileSyncNotifications?: any;
 	fileSysBackupEnable?: any;
 	fileSysBackupAutoBackup?: any;
+	fileSysBackupHistoryEnable?: any;
+	fileSysBackupHistoryLimit?: any;
 	fileTreeFilesystemDragDrop?: boolean;
 	fileTreeInternalDragDrop?: boolean;
 	genericLspConfigs?: any;

@@ -113,6 +113,10 @@ export const FileSystemBackupProvider: React.FC<
 		(getSetting('file-sys-backup-timed-enable')?.value as boolean) ?? false;
 	const timedBackupIntervalMinutes =
 		(getSetting('file-sys-backup-timed-interval')?.value as number) ?? 15;
+	const backupHistoryEnabled =
+		(getSetting('file-sys-backup-history-enable')?.value as boolean) ?? false;
+	const backupHistoryLimit =
+		(getSetting('file-sys-backup-history-limit')?.value as number) ?? 10;
 
 	const getEffectiveEnabled = useCallback(() => {
 		return backupEnabledSetting || tempEnabled;
@@ -261,6 +265,13 @@ export const FileSystemBackupProvider: React.FC<
 			fileSystemBackupService.setEnabled(false);
 		}
 	}, [backupEnabledSetting, tempEnabled]);
+
+	useEffect(() => {
+		fileSystemBackupService.setBackupHistoryOptions(
+			backupHistoryEnabled,
+			backupHistoryLimit,
+		);
+	}, [backupHistoryEnabled, backupHistoryLimit]);
 
 	useEffect(() => {
 		if (!backupEnabledSetting || !backupOnSave || !status.isConnected) {
