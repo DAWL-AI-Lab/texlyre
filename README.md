@@ -149,6 +149,24 @@ The same image can serve HTTPS using a PEM certificate and key. Create a
 certificate trusted by the client browsers (for example, one issued for the
 host's DNS name, or a certificate from a private CA trusted on the LAN).
 
+For development or a private LAN, the included PowerShell generator produces
+the required PEM files. It requires `openssl` on `PATH` and works in both
+Windows PowerShell 5.1 and PowerShell 7. Include the Docker host's LAN IP in
+the certificate; browsers do not accept an IP address unless it appears in the
+certificate's Subject Alternative Name.
+
+```powershell
+.\scripts\new-development-tls-certificate.ps1 `
+  -CommonName '192.168.0.105' `
+  -DnsName 'localhost' `
+  -IpAddress '127.0.0.1', '192.168.0.105'
+```
+
+This writes `certs/tls.crt` and the unencrypted `certs/tls.key`. Use `-Force`
+only when you intend to replace an existing certificate. A self-signed
+certificate encrypts traffic but must be explicitly trusted on client devices
+to avoid a browser warning.
+
 ```bash
 docker compose -f compose.https.yaml up --build
 ```
