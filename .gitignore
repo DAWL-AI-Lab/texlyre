@@ -39,3 +39,6 @@ src/plugins/
 *.njsproj
 *.sln
 *.sw?
+
+# TLS material is mounted into the Docker HTTPS deployment at runtime.
+certs/

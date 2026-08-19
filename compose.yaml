@@ -1,0 +1,15 @@
+services:
+  texlyre:
+    build:
+      context: .
+    image: texlyre:local
+    environment:
+      # When both variables are set, nginx exposes a same-origin WebSocket
+      # proxy for the Remote MiKTeX (server) compiler.
+      TEXLYRE_TYPESETTER_URL: ${TEXLYRE_TYPESETTER_URL:-}
+      TEXLYRE_TYPESETTER_PROXY_TOKEN: ${TEXLYRE_TYPESETTER_PROXY_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TEXLYRE_HTTP_PORT:-8080}:80"
+    restart: unless-stopped

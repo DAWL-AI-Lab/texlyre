@@ -1,0 +1,17 @@
+services:
+  texlyre:
+    build:
+      context: .
+    image: texlyre:local
+    environment:
+      TLS_ENABLED: "true"
+      # See compose.yaml for the optional Remote MiKTeX proxy variables.
+      TEXLYRE_TYPESETTER_URL: ${TEXLYRE_TYPESETTER_URL:-}
+      TEXLYRE_TYPESETTER_PROXY_TOKEN: ${TEXLYRE_TYPESETTER_PROXY_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TEXLYRE_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    restart: unless-stopped

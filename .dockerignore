@@ -1,0 +1,30 @@
+.git
+.github
+.synctex-chrome-profile
+node_modules
+dist
+coverage
+*.log
+
+# Generated during the Docker build. Keeping these out of the context avoids
+# transferring the large local compiler and font bundles to Docker Desktop.
+public/assets/cmaps/
+public/assets/fonts/
+# Grammar source files are regenerated at build time, but their small tracked
+# manifest templates are required by the generator.
+public/assets/grammars/**
+!public/assets/grammars/**/
+!public/assets/grammars/**/manifest.json
+!public/assets/grammars/**/*-embedded.tmLanguage.json
+!public/assets/grammars/lilypond/README.md
+public/core/busytex/
+public/core/detypify/
+public/core/drawio-embed/
+public/core/oniguruma/
+public/core/texfmt/
+public/core/tikz-editor/
+public/core/typst-ts-renderer/
+public/core/typst-ts-web-compiler/
+
+# Certificates are mounted at runtime and must never be added to the image.
+certs/

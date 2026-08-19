@@ -116,6 +116,104 @@ The infrastructure recipes support language servers such as **[LTeX LS Plus](htt
 ## Quick Start
 
 
+## Run with Docker
+
+Docker Desktop is the quickest way to run Texlyre on another computer. The
+first build downloads the bundled browser-side LaTeX, Typst, editor, and font
+assets, so it is large and can take a few minutes. Subsequent starts reuse the
+image.
+
+```bash
+docker compose up --build
+```
+
+Open [http://localhost:8080/texlyre/](http://localhost:8080/texlyre/). To use a
+different HTTP port, set `TEXLYRE_HTTP_PORT` before starting Compose. On
+PowerShell, for example:
+
+```powershell
+$env:TEXLYRE_HTTP_PORT = 8080
+docker compose up --build
+```
+
+For another device on the same network, replace `localhost` with the Docker
+host's IP address and allow the chosen port through that host's firewall. The
+app stores projects in each browser's local storage; no project volume is
+needed for the container.
+
+### HTTPS
+
+The same image can serve HTTPS using a PEM certificate and key. Create a
+`certs` directory next to `compose.https.yaml`, then place the certificate at
+`certs/tls.crt` and the unencrypted private key at `certs/tls.key`. Use a
+certificate trusted by the client browsers (for example, one issued for the
+host's DNS name, or a certificate from a private CA trusted on the LAN).
+
+```bash
+docker compose -f compose.https.yaml up --build
+```
+
+Open [https://localhost:8443/texlyre/](https://localhost:8443/texlyre/). Set
+`TEXLYRE_HTTPS_PORT` to use another port; use `443` when exposing it as the
+standard HTTPS service. A self-signed certificate encrypts traffic but will
+still trigger a browser warning until its issuer is trusted.
+
+Stop either deployment with `docker compose down` (or include
+`-f compose.https.yaml` for the HTTPS deployment). HTTPS only covers the web
+application; any external LSP or typesetter endpoint configured in Texlyre
+must itself use `wss://` when accessed from an HTTPS page.
+
+### Remote MiKTeX
+
+The Docker deployment supports Texlyre's automatic **Remote MiKTeX (server)**
+compiler through a same-origin WebSocket proxy. Start the MiKTeX typesetter on
+the Docker host (or a separately secured server) with a strong shared token.
+For a Windows Docker host, this repository's helper can do that:
+
+```powershell
+.\scripts\start-local-latex-typesetter.ps1 `
+  -ListenAddress 0.0.0.0 `
+  -AccessToken 'replace-with-a-long-random-secret'
+```
+
+Set the same token on the container and point it at the typesetter before
+starting Compose. Docker Desktop resolves `host.docker.internal` to the host
+computer; use the other server's `ws://` or `wss://` URL instead when MiKTeX
+runs elsewhere.
+
+```powershell
+$env:TEXLYRE_TYPESETTER_URL = 'ws://host.docker.internal:7021'
+$env:TEXLYRE_TYPESETTER_PROXY_TOKEN = 'replace-with-a-long-random-secret'
+docker compose up --build
+```
+
+Use the identical variables with `-f compose.https.yaml` for the HTTPS setup.
+Open Texlyre by the Docker host's LAN address or DNS name—not `localhost`—and
+the compiler menu will probe the proxied endpoint and show **Remote MiKTeX
+(server)** when it receives the MiKTeX version. The secret stays inside the
+container and is injected by nginx; it is never sent to browser JavaScript.
+Do not publish port 7021, and restrict the typesetter's firewall to the Docker
+host or trusted network. With HTTPS, browsers connect to nginx over WSS while
+nginx can safely reach a private `ws://` typesetter on the host network.
+
+On Windows, the launcher automates this setup: it creates/reuses a random
+server-only token, starts the protected MiKTeX typesetter, starts Docker, and
+waits for the container health check.
+
+```powershell
+.\scripts\start-docker-texlyre.ps1
+# or, after placing certs/tls.crt and certs/tls.key:
+.\scripts\start-docker-texlyre.ps1 -Https
+```
+
+It defaults to a MiKTeX typesetter on port `7021`. Pass `-TypesetterUrl` to
+proxy an already-running typesetter on another machine instead, or
+`-TypesetterPort` to use a different local port. The `-SkipBuild` option starts
+an already-built image without rebuilding it. To proxy an existing remote
+typesetter that uses a token, provide that same token with `-AccessToken` (or
+put it in the launcher's token file).
+
+
 For detailed installation instructions, advanced configuration, and development workflows, see the [installation documentation](https://texlyre.org/docs/installation). 
 
 For configuring TeXlyre's theme, properties, and supported plugins, see the [configuration documentation](https://texlyre.org/docs/configuration#configuration-files). 
